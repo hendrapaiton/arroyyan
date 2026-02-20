@@ -203,8 +203,6 @@ bun run deploy --env production
 | `bun test` | Run all tests |
 | `bun run test:watch` | Run tests in watch mode |
 | `bun run test:coverage` | Run tests with coverage report |
-| `bun run test:api` | Test live API endpoints (Windows) |
-| `bun run deploy:full` | Full deployment pipeline (Windows) |
 
 ## 🧪 Testing
 
