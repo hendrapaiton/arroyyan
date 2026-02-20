@@ -8,10 +8,13 @@
     "deploy": "wrangler deploy",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "wrangler d1 migrations apply arroyyan-db",
+    "db:migrate:remote": "wrangler d1 migrations apply arroyyan-db --remote",
     "db:studio": "drizzle-kit studio",
     "test": "bun test",
     "test:watch": "bun test --watch",
     "test:coverage": "bun test --coverage",
+    "test:api": "powershell -File ./scripts/test-api.ps1",
+    "deploy:full": "powershell -File ./scripts/deploy.bat",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/"
   },

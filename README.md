@@ -196,12 +196,15 @@ bun run deploy --env production
 | `bun run dev` | Start development server |
 | `bun run deploy` | Deploy to Cloudflare |
 | `bun run db:generate` | Generate new migrations |
-| `bun run db:migrate` | Apply migrations to D1 |
+| `bun run db:migrate` | Apply migrations to local D1 |
+| `bun run db:migrate:remote` | Apply migrations to remote D1 |
 | `bun run db:studio` | Open Drizzle Studio |
 | `bun run typecheck` | Type check the project |
 | `bun test` | Run all tests |
-| `bun test:watch` | Run tests in watch mode |
-| `bun test:coverage` | Run tests with coverage report |
+| `bun run test:watch` | Run tests in watch mode |
+| `bun run test:coverage` | Run tests with coverage report |
+| `bun run test:api` | Test live API endpoints (Windows) |
+| `bun run deploy:full` | Full deployment pipeline (Windows) |
 
 ## 🧪 Testing
 
