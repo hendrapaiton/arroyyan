@@ -1,9 +1,13 @@
 import { createApp, type Bindings, type Variables } from "./app";
 import { createAuth } from "./auth";
 import { createDb } from "./db";
+import { validateConfig } from "./config";
 
 // Export types for Cloudflare Workers
 export type { Bindings, Variables };
+
+// Validate configuration on startup
+validateConfig();
 
 // Create the main app instance
 const app = createApp();

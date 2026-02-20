@@ -4,11 +4,12 @@ import { logger } from "hono/logger";
 import { secureHeaders } from "hono/secure-headers";
 import type { Auth } from "@/auth";
 import type { Database } from "@/db";
+import { getConfig } from "./config";
 
-// Import routes
-import { healthRoutes } from "./routes/health";
-import { authRoutes } from "./routes/auth";
-import { todoRoutes } from "./routes/todos";
+// Import modules
+import { health } from "./modules/health";
+import { auth } from "./modules/auth";
+import { todos } from "./modules/todos";
 
 export type Bindings = {
   DB: D1Database;
@@ -25,6 +26,7 @@ export type Variables = {
  * Create the main Hono application with all middleware and routes
  */
 export function createApp() {
+  const config = getConfig();
   const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
   // Global middleware
@@ -33,7 +35,7 @@ export function createApp() {
   app.use(
     "*",
     cors({
-      origin: ["http://localhost:3000", "https://yourdomain.com"],
+      origin: config.corsOrigins,
       allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
       allowHeaders: ["Content-Type", "Authorization"],
       exposeHeaders: ["Content-Length"],
@@ -42,20 +44,30 @@ export function createApp() {
     })
   );
 
-  // Routes
+  // Root endpoint - API information
   app.get("/", (c) => {
     return c.json({
       name: "Karnaval Purwarupa",
       url: "www.karnarupa.com",
     });
   });
-  app.route("/health", healthRoutes);
-  app.route("/auth", authRoutes);
-  app.route("/todos", todoRoutes);
+
+  // Health check endpoint
+  app.route("/health", health);
+
+  // API routes
+  app.route("/api/auth", auth);
+  app.route("/api/todos", todos);
 
   // 404 handler
   app.notFound((c) => {
-    return c.json({ error: "Not Found", message: `Route ${c.req.path} not found` }, 404);
+    return c.json(
+      {
+        error: "Not Found",
+        message: `Route ${c.req.path} not found`,
+      },
+      404
+    );
   });
 
   // Error handler

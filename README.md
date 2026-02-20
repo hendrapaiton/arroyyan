@@ -21,20 +21,31 @@ arroyyan/
 ├── src/
 │   ├── index.ts          # Worker entry point
 │   ├── app.ts            # Hono app configuration
+│   ├── config.ts         # Environment configuration
 │   ├── auth/
 │   │   └── index.ts      # Better-Auth setup
 │   ├── db/
 │   │   ├── index.ts      # Drizzle ORM setup
 │   │   └── schema.ts     # Database schema
-│   ├── routes/
-│   │   ├── health.ts     # Health check endpoints
-│   │   ├── auth.ts       # Authentication endpoints
-│   │   └── todos.ts      # Todo CRUD endpoints
+│   ├── middlewares/
+│   │   └── auth.ts       # Authentication middleware
+│   ├── modules/
+│   │   ├── auth/
+│   │   │   └── index.ts  # Auth module
+│   │   ├── todos/
+│   │   │   └── index.ts  # Todos module
+│   │   └── health/
+│   │       └── index.ts  # Health check module
 │   ├── lib/
 │   │   ├── schemas.ts    # Zod schemas
 │   │   ├── utils.ts      # Utility functions
 │   │   └── nanoid.ts     # ID generator
 │   └── types/            # TypeScript types
+├── docs/
+│   ├── AUTH.md           # Auth module documentation
+│   ├── TODOS.md          # Todos module documentation
+│   ├── API.md            # API documentation
+│   └── QWEN.md           # Project context
 ├── drizzle/
 │   └── 0000_initial.sql  # Database migrations
 ├── drizzle.config.ts     # Drizzle Kit config
@@ -95,12 +106,19 @@ The API will be available at `http://localhost:8787`
 
 | Endpoint | URL |
 |----------|-----|
+| API Info | `https://arroyyan.karnarupa.workers.dev/` |
 | Health Check | `https://arroyyan.karnarupa.workers.dev/health` |
-| Auth Signup | `https://arroyyan.karnarupa.workers.dev/auth/signup` |
-| Auth Signin | `https://arroyyan.karnarupa.workers.dev/auth/signin` |
-| Todos (Protected) | `https://arroyyan.karnarupa.workers.dev/todos` |
+| Auth Signup | `https://arroyyan.karnarupa.workers.dev/api/auth/signup` |
+| Auth Signin | `https://arroyyan.karnarupa.workers.dev/api/auth/signin` |
+| Todos (Protected) | `https://arroyyan.karnarupa.workers.dev/api/todos` |
 
 ## 📡 API Endpoints
+
+### Root
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/` | API information |
 
 ### Health Check
 
@@ -114,27 +132,33 @@ The API will be available at `http://localhost:8787`
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/auth/signup` | Create new account |
-| POST | `/auth/signin` | Sign in |
-| POST | `/auth/signout` | Sign out |
-| GET | `/auth/session` | Get current session |
+| POST | `/api/auth/signup` | Create new account |
+| POST | `/api/auth/signin` | Sign in |
+| POST | `/api/auth/signout` | Sign out |
+| GET | `/api/auth/session` | Get current session |
 
 ### Todos (Protected)
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/todos` | Get all todos |
-| GET | `/todos/:id` | Get single todo |
-| POST | `/todos` | Create todo |
-| PATCH | `/todos/:id` | Update todo |
-| DELETE | `/todos/:id` | Delete todo |
+| GET | `/api/todos` | Get all todos |
+| GET | `/api/todos/:id` | Get single todo |
+| POST | `/api/todos` | Create todo |
+| PATCH | `/api/todos/:id` | Update todo |
+| DELETE | `/api/todos/:id` | Delete todo |
 
 ## 📝 Usage Examples
+
+### API Info
+
+```bash
+curl http://localhost:8787/
+```
 
 ### Sign Up
 
 ```bash
-curl -X POST http://localhost:8787/auth/signup \
+curl -X POST http://localhost:8787/api/auth/signup \
   -H "Content-Type: application/json" \
   -d '{
     "email": "user@example.com",
@@ -146,7 +170,7 @@ curl -X POST http://localhost:8787/auth/signup \
 ### Sign In
 
 ```bash
-curl -X POST http://localhost:8787/auth/signin \
+curl -X POST http://localhost:8787/api/auth/signin \
   -H "Content-Type: application/json" \
   -d '{
     "email": "user@example.com",
@@ -157,7 +181,7 @@ curl -X POST http://localhost:8787/auth/signin \
 ### Create Todo (Authenticated)
 
 ```bash
-curl -X POST http://localhost:8787/todos \
+curl -X POST http://localhost:8787/api/todos \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \
   -d '{
@@ -169,7 +193,7 @@ curl -X POST http://localhost:8787/todos \
 ### Get All Todos
 
 ```bash
-curl -X GET http://localhost:8787/todos \
+curl -X GET http://localhost:8787/api/todos \
   -H "Authorization: Bearer YOUR_SESSION_TOKEN"
 ```
 
@@ -266,8 +290,8 @@ describe("My Feature Tests", () => {
 
 ## 🔐 Authentication Flow
 
-1. User signs up via `/auth/signup`
-2. User signs in via `/auth/signin`
+1. User signs up via `/api/auth/signup`
+2. User signs in via `/api/auth/signin`
 3. Session token is returned
 4. Include token in `Authorization: Bearer <token>` header for protected routes
 
@@ -280,6 +304,13 @@ The project includes the following tables:
 - **account** - OAuth provider accounts
 - **verification** - Email verification tokens
 - **todo** - Example application table
+
+## 📚 Documentation
+
+- [API Documentation](./docs/API.md) - Complete API reference
+- [Auth Module](./docs/AUTH.md) - Authentication details
+- [Todos Module](./docs/TODOS.md) - Todo CRUD details
+- [Project Context](./docs/QWEN.md) - Architecture and patterns
 
 ## 📚 Additional Resources
 
