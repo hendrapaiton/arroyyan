@@ -6,10 +6,6 @@ out
 dist
 *.tgz
 
-# code coverage
-coverage
-*.lcov
-
 # logs
 logs
 _.log
@@ -32,3 +28,9 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 
 # Finder (MacOS) folder config
 .DS_Store
+
+# Wrangler temporary files
+.wrangler/tmp
+
+# Database files (local development)
+*.db
