@@ -7,7 +7,7 @@
 
 ## Overview
 
-Arroyyan is a RESTful API built with Hono on Cloudflare Workers, providing authentication and todo management functionality.
+Arroyyan is a **Petshop Management System** API built with Hono on Cloudflare Workers, providing authentication, customer management, pet records, product inventory, services, appointments, and sales tracking.
 
 ## Root Endpoint
 
@@ -18,7 +18,7 @@ Returns API information.
 **Response:**
 ```json
 {
-  "name": "Karnaval Purwarupa",
+  "name": "Arroyyan - Petshop Management System",
   "url": "www.karnarupa.com"
 }
 ```
@@ -74,17 +74,66 @@ Liveness probe.
 
 See [AUTH.md](./AUTH.md) for detailed documentation.
 
-## Todo Endpoints
+## Customer Endpoints
 
-| Method | Endpoint | Description | Auth Required |
-|--------|----------|-------------|---------------|
-| GET | /api/todos | List all todos | Yes |
-| GET | /api/todos/:id | Get single todo | Yes |
-| POST | /api/todos | Create todo | Yes |
-| PATCH | /api/todos/:id | Update todo | Yes |
-| DELETE | /api/todos/:id | Delete todo | Yes |
+All customer endpoints require authentication.
 
-See [TODOS.md](./TODOS.md) for detailed documentation.
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| GET | /api/customers | List all customers | Yes |
+| GET | /api/customers/:id | Get customer with pets | Yes |
+| POST | /api/customers | Create customer | Yes |
+| PATCH | /api/customers/:id | Update customer | Yes |
+| DELETE | /api/customers/:id | Delete customer | Yes |
+
+### Example: Create Customer
+
+```bash
+curl -X POST http://localhost:8787/api/customers \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <token>" \
+  -d '{
+    "name": "John Doe",
+    "email": "john@example.com",
+    "phone": "08123456789",
+    "address": "Jl. Example No. 123"
+  }'
+```
+
+See [CUSTOMERS.md](./CUSTOMERS.md) for detailed documentation.
+
+## Product Endpoints
+
+All product endpoints require authentication.
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| GET | /api/products | List all products | Yes |
+| GET | /api/products/low-stock | Get low stock products | Yes |
+| GET | /api/products/:id | Get single product | Yes |
+| POST | /api/products | Create product | Yes |
+| PATCH | /api/products/:id | Update product | Yes |
+| DELETE | /api/products/:id | Delete product | Yes |
+
+### Example: Create Product
+
+```bash
+curl -X POST http://localhost:8787/api/products \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <token>" \
+  -d '{
+    "name": "Dog Food Premium",
+    "sku": "DF-001",
+    "category": "food",
+    "price": 150000,
+    "cost": 100000,
+    "stock": 50,
+    "minStock": 10,
+    "unit": "kg"
+  }'
+```
+
+See [PRODUCTS.md](./PRODUCTS.md) for detailed documentation.
 
 ## Response Format
 
@@ -119,7 +168,7 @@ See [TODOS.md](./TODOS.md) for detailed documentation.
 
 ## Authentication
 
-Most endpoints require authentication using a Bearer token:
+All protected endpoints require authentication using a Bearer token:
 
 ```
 Authorization: Bearer <session_token>
@@ -131,42 +180,69 @@ Authorization: Bearer <session_token>
 2. Receive session token in response
 3. Include token in subsequent requests
 
+## Database Schema
+
+### Auth Tables
+- **user** - User accounts (staff/admin)
+- **session** - User sessions
+- **account** - OAuth accounts
+- **verification** - Verification tokens
+
+### Petshop Tables
+- **customer** - Customer/pet owner information
+- **pet** - Pet records
+- **product** - Product inventory
+- **service** - Available services
+- **appointment** - Service bookings
+- **sale** - Sales transactions
+- **sale_item** - Sale line items
+
 ## CORS
 
 The API supports CORS for cross-origin requests from allowed origins:
 
 - `http://localhost:3000` (development)
 - `http://localhost:8787` (local workers)
-- `https://yourdomain.com` (production)
 - `https://karnarupa.com` (production)
 - `https://www.karnarupa.com` (production)
 
-## Rate Limiting
-
-Rate limiting is recommended for production deployments to prevent abuse.
-
 ## Examples
 
-### Complete Authentication Flow
+### Complete Flow: Register Customer and Create Sale
 
 ```bash
-# 1. Register
-curl -X POST http://localhost:8787/api/auth/signup \
-  -H "Content-Type: application/json" \
-  -d '{"email":"user@example.com","password":"password123","name":"John"}'
-
-# 2. Sign in
+# 1. Sign in
 curl -X POST http://localhost:8787/api/auth/signin \
   -H "Content-Type: application/json" \
-  -d '{"email":"user@example.com","password":"password123"}'
+  -d '{"email":"admin@petshop.com","password":"password123"}'
 
-# 3. Create todo (use token from sign-in response)
-curl -X POST http://localhost:8787/api/todos \
+# 2. Create customer (use token from sign-in)
+curl -X POST http://localhost:8787/api/customers \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer <token>" \
-  -d '{"title":"My first todo"}'
+  -d '{
+    "name": "Jane Smith",
+    "email": "jane@example.com",
+    "phone": "08123456789"
+  }'
 
-# 4. Get all todos
-curl -X GET http://localhost:8787/api/todos \
+# 3. Create product
+curl -X POST http://localhost:8787/api/products \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <token>" \
+  -d '{
+    "name": "Cat Food",
+    "sku": "CF-001",
+    "category": "food",
+    "price": 75000,
+    "stock": 100
+  }'
+
+# 4. Get all customers
+curl -X GET http://localhost:8787/api/customers \
+  -H "Authorization: Bearer <token>"
+
+# 5. Get low stock products
+curl -X GET http://localhost:8787/api/products/low-stock \
   -H "Authorization: Bearer <token>"
 ```

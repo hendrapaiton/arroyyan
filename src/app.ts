@@ -9,7 +9,8 @@ import { getConfig } from "./config";
 // Import modules
 import { health } from "./modules/health";
 import { auth } from "./modules/auth";
-import { todos } from "./modules/todos";
+import { customers } from "./modules/customers";
+import { products } from "./modules/products";
 
 export type Bindings = {
   DB: D1Database;
@@ -47,7 +48,7 @@ export function createApp() {
   // Root endpoint - API information
   app.get("/", (c) => {
     return c.json({
-      name: "Karnaval Purwarupa",
+      name: "Arroyyan - Petshop Management System",
       url: "www.karnarupa.com",
     });
   });
@@ -57,7 +58,8 @@ export function createApp() {
 
   // API routes
   app.route("/api/auth", auth);
-  app.route("/api/todos", todos);
+  app.route("/api/customers", customers);
+  app.route("/api/products", products);
 
   // 404 handler
   app.notFound((c) => {

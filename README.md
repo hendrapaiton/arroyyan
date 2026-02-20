@@ -1,6 +1,6 @@
-# Arroyyan
+# Arroyyan - Petshop Management System
 
-Professional Cloudflare Workers API with Hono, Better-Auth, Drizzle ORM, Zod validation, and D1 Database.
+Professional Cloudflare Workers API for Petshop Management with Hono, Better-Auth, Drizzle ORM, Zod validation, and D1 Database.
 
 ## 🚀 Tech Stack
 
@@ -32,8 +32,10 @@ arroyyan/
 │   ├── modules/
 │   │   ├── auth/
 │   │   │   └── index.ts  # Auth module
-│   │   ├── todos/
-│   │   │   └── index.ts  # Todos module
+│   │   ├── customers/
+│   │   │   └── index.ts  # Customer management
+│   │   ├── products/
+│   │   │   └── index.ts  # Product inventory
 │   │   └── health/
 │   │       └── index.ts  # Health check module
 │   ├── lib/
@@ -42,9 +44,10 @@ arroyyan/
 │   │   └── nanoid.ts     # ID generator
 │   └── types/            # TypeScript types
 ├── docs/
-│   ├── AUTH.md           # Auth module documentation
-│   ├── TODOS.md          # Todos module documentation
 │   ├── API.md            # API documentation
+│   ├── AUTH.md           # Auth module docs
+│   ├── CUSTOMERS.md      # Customer management docs
+│   ├── PRODUCTS.md       # Product inventory docs
 │   └── QWEN.md           # Project context
 ├── drizzle/
 │   └── 0000_initial.sql  # Database migrations
@@ -110,7 +113,8 @@ The API will be available at `http://localhost:8787`
 | Health Check | `https://arroyyan.karnarupa.workers.dev/health` |
 | Auth Signup | `https://arroyyan.karnarupa.workers.dev/api/auth/signup` |
 | Auth Signin | `https://arroyyan.karnarupa.workers.dev/api/auth/signin` |
-| Todos (Protected) | `https://arroyyan.karnarupa.workers.dev/api/todos` |
+| Customers | `https://arroyyan.karnarupa.workers.dev/api/customers` |
+| Products | `https://arroyyan.karnarupa.workers.dev/api/products` |
 
 ## 📡 API Endpoints
 
@@ -137,15 +141,26 @@ The API will be available at `http://localhost:8787`
 | POST | `/api/auth/signout` | Sign out |
 | GET | `/api/auth/session` | Get current session |
 
-### Todos (Protected)
+### Customers (Protected)
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/todos` | Get all todos |
-| GET | `/api/todos/:id` | Get single todo |
-| POST | `/api/todos` | Create todo |
-| PATCH | `/api/todos/:id` | Update todo |
-| DELETE | `/api/todos/:id` | Delete todo |
+| GET | `/api/customers` | List all customers |
+| GET | `/api/customers/:id` | Get customer with pets |
+| POST | `/api/customers` | Create customer |
+| PATCH | `/api/customers/:id` | Update customer |
+| DELETE | `/api/customers/:id` | Delete customer |
+
+### Products (Protected)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/products` | List all products |
+| GET | `/api/products/low-stock` | Low stock alert |
+| GET | `/api/products/:id` | Get single product |
+| POST | `/api/products` | Create product |
+| PATCH | `/api/products/:id` | Update product |
+| DELETE | `/api/products/:id` | Delete product |
 
 ## 📝 Usage Examples
 
@@ -161,9 +176,9 @@ curl http://localhost:8787/
 curl -X POST http://localhost:8787/api/auth/signup \
   -H "Content-Type: application/json" \
   -d '{
-    "email": "user@example.com",
+    "email": "admin@petshop.com",
     "password": "password123",
-    "name": "John Doe"
+    "name": "Admin"
   }'
 ```
 
@@ -173,27 +188,53 @@ curl -X POST http://localhost:8787/api/auth/signup \
 curl -X POST http://localhost:8787/api/auth/signin \
   -H "Content-Type: application/json" \
   -d '{
-    "email": "user@example.com",
+    "email": "admin@petshop.com",
     "password": "password123"
   }'
 ```
 
-### Create Todo (Authenticated)
+### Create Customer (Authenticated)
 
 ```bash
-curl -X POST http://localhost:8787/api/todos \
+curl -X POST http://localhost:8787/api/customers \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \
   -d '{
-    "title": "Buy groceries",
-    "description": "Milk, eggs, bread"
+    "name": "John Doe",
+    "email": "john@example.com",
+    "phone": "08123456789"
   }'
 ```
 
-### Get All Todos
+### Create Product (Authenticated)
 
 ```bash
-curl -X GET http://localhost:8787/api/todos \
+curl -X POST http://localhost:8787/api/products \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_SESSION_TOKEN" \
+  -d '{
+    "name": "Dog Food Premium",
+    "sku": "DF-001",
+    "category": "food",
+    "price": 150000,
+    "cost": 100000,
+    "stock": 50,
+    "minStock": 10,
+    "unit": "kg"
+  }'
+```
+
+### Get All Customers
+
+```bash
+curl -X GET http://localhost:8787/api/customers \
+  -H "Authorization: Bearer YOUR_SESSION_TOKEN"
+```
+
+### Get Low Stock Products
+
+```bash
+curl -X GET http://localhost:8787/api/products/low-stock \
   -H "Authorization: Bearer YOUR_SESSION_TOKEN"
 ```
 
@@ -228,88 +269,36 @@ bun run deploy --env production
 | `bun run test:watch` | Run tests in watch mode |
 | `bun run test:coverage` | Run tests with coverage report |
 
-## 🧪 Testing
-
-The project includes comprehensive tests using **Bun's built-in test runner**.
-
-### Run Tests
-
-```bash
-# Run all tests
-bun test
-
-# Run tests in watch mode
-bun run test:watch
-
-# Run tests with coverage
-bun run test:coverage
-
-# Run specific test file
-bun test tests/database.test.ts
-```
-
-### Test Structure
-
-| File | Description |
-|------|-------------|
-| `tests/utils.ts` | Test utilities and factories |
-| `tests/database.test.ts` | Database schema tests |
-| `tests/auth.test.ts` | Authentication flow tests |
-| `tests/todos.test.ts` | Todo CRUD integration tests |
-| `tests/migrations.test.ts` | Migration validation tests |
-
-### Test Coverage
-
-Tests cover:
-- **Database Schema**: User, Session, Account, Verification, Todo tables
-- **Constraints**: Unique, Foreign Key, Cascade Delete
-- **Auth Flows**: Registration, Login, Session Management, OAuth
-- **CRUD Operations**: Create, Read, Update, Delete with proper isolation
-- **Migrations**: SQL validation, indexes, constraints
-
-### Writing New Tests
-
-```typescript
-import { describe, test, expect, beforeEach } from "bun:test";
-import { createTestDatabase, factories } from "./utils";
-import * as schema from "../src/db/schema";
-
-describe("My Feature Tests", () => {
-  let db: ReturnType<typeof createTestDatabase>["db"];
-
-  beforeEach(() => {
-    const testDb = createTestDatabase();
-    db = testDb.db;
-  });
-
-  test("should do something", async () => {
-    // Your test here
-  });
-});
-```
-
 ## 🔐 Authentication Flow
 
-1. User signs up via `/api/auth/signup`
+1. Staff user signs up via `/api/auth/signup`
 2. User signs in via `/api/auth/signin`
 3. Session token is returned
 4. Include token in `Authorization: Bearer <token>` header for protected routes
 
 ## 🗄️ Database Schema
 
-The project includes the following tables:
-
-- **user** - User accounts
+### Auth Tables
+- **user** - Staff/admin user accounts
 - **session** - User sessions
 - **account** - OAuth provider accounts
 - **verification** - Email verification tokens
-- **todo** - Example application table
+
+### Petshop Tables
+- **customer** - Customer/pet owner information
+- **pet** - Pet records (linked to customers)
+- **product** - Product inventory
+- **service** - Available services
+- **appointment** - Service bookings
+- **sale** - Sales transactions
+- **sale_item** - Sale line items
 
 ## 📚 Documentation
 
 - [API Documentation](./docs/API.md) - Complete API reference
 - [Auth Module](./docs/AUTH.md) - Authentication details
-- [Todos Module](./docs/TODOS.md) - Todo CRUD details
+- [Customers Module](./docs/CUSTOMERS.md) - Customer management
+- [Products Module](./docs/PRODUCTS.md) - Product inventory
 - [Project Context](./docs/QWEN.md) - Architecture and patterns
 
 ## 📚 Additional Resources

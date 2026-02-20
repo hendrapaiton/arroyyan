@@ -1,8 +1,8 @@
-# Arroyyan - Project Context
+# Arroyyan - Petshop Management System
 
 ## Overview
 
-Arroyyan is a RESTful API built with Hono on Cloudflare Workers, providing authentication and todo management functionality. The project follows a modular architecture similar to the Ternak project.
+Arroyyan is a comprehensive **Petshop Management System** built with Hono on Cloudflare Workers. It provides complete functionality for managing customers, pets, products, services, appointments, and sales.
 
 ## Tech Stack
 
@@ -34,8 +34,10 @@ arroyyan/
 │   ├── modules/
 │   │   ├── auth/
 │   │   │   └── index.ts      # Auth module
-│   │   ├── todos/
-│   │   │   └── index.ts      # Todos module
+│   │   ├── customers/
+│   │   │   └── index.ts      # Customer management
+│   │   ├── products/
+│   │   │   └── index.ts      # Product inventory
 │   │   └── health/
 │   │       └── index.ts      # Health check module
 │   ├── lib/
@@ -45,9 +47,10 @@ arroyyan/
 │   └── types/
 │       └── index.ts          # Type definitions
 ├── docs/
+│   ├── API.md                # API documentation
 │   ├── AUTH.md               # Auth module docs
-│   ├── TODOS.md              # Todos module docs
-│   └── API.md                # API documentation
+│   ├── CUSTOMERS.md          # Customer management docs
+│   └── PRODUCTS.md           # Product inventory docs
 ├── drizzle/
 │   └── 0000_initial.sql      # Database migrations
 ├── tests/
@@ -61,13 +64,19 @@ arroyyan/
 ## Database Schema
 
 ### Auth Tables
-- **user** - User accounts
+- **user** - Staff/admin user accounts
 - **session** - User sessions
-- **account** - OAuth accounts
+- **account** - OAuth provider accounts
 - **verification** - Email verification tokens
 
-### Application Tables
-- **todo** - Todo items (user-specific)
+### Petshop Tables
+- **customer** - Customer/pet owner information
+- **pet** - Pet records (linked to customers)
+- **product** - Product inventory
+- **service** - Available services (grooming, vet, etc.)
+- **appointment** - Service bookings
+- **sale** - Sales transactions
+- **sale_item** - Sale line items
 
 ## API Endpoints
 
@@ -85,12 +94,20 @@ arroyyan/
 - `POST /api/auth/signout` - Sign out
 - `GET /api/auth/session` - Get session
 
-### Todos
-- `GET /api/todos` - List todos
-- `GET /api/todos/:id` - Get todo
-- `POST /api/todos` - Create todo
-- `PATCH /api/todos/:id` - Update todo
-- `DELETE /api/todos/:id` - Delete todo
+### Customers
+- `GET /api/customers` - List customers
+- `GET /api/customers/:id` - Get customer with pets
+- `POST /api/customers` - Create customer
+- `PATCH /api/customers/:id` - Update customer
+- `DELETE /api/customers/:id` - Delete customer
+
+### Products
+- `GET /api/products` - List products
+- `GET /api/products/low-stock` - Low stock alert
+- `GET /api/products/:id` - Get product
+- `POST /api/products` - Create product
+- `PATCH /api/products/:id` - Update product
+- `DELETE /api/products/:id` - Delete product
 
 ## Commands
 
@@ -109,8 +126,8 @@ bun run db:studio              # Open Drizzle Studio
 
 # Testing
 bun test                       # Run tests
-bun test:watch                 # Run tests in watch mode
-bun test:coverage              # Run tests with coverage
+bun test:watch                 # Watch mode
+bun test:coverage              # With coverage
 
 # Type checking & linting
 bun run typecheck              # TypeScript check
@@ -128,7 +145,6 @@ bun run lint                   # ESLint
 ### CORS Origins
 - `http://localhost:3000`
 - `http://localhost:8787`
-- `https://yourdomain.com`
 - `https://karnarupa.com`
 - `https://www.karnarupa.com`
 
@@ -143,9 +159,13 @@ Each module follows a consistent pattern:
 
 ```typescript
 import { Hono } from "hono";
-import type { Bindings, Variables } from "../app";
+import type { Bindings, Variables } from "../../app";
 
 const module = new Hono<{ Bindings: Bindings; Variables: Variables }>();
+
+// Auth middleware
+const authMiddleware = async (c, next) => { ... };
+module.use("*", authMiddleware);
 
 // Routes
 module.get("/", async (c) => { ... });
@@ -156,7 +176,7 @@ export { module };
 
 ## Authentication Flow
 
-1. User registers via `/api/auth/signup`
+1. Staff user registers via `/api/auth/signup`
 2. User signs in via `/api/auth/signin`
 3. Session token returned and stored client-side
 4. Token included in `Authorization: Bearer <token>` header
@@ -170,8 +190,8 @@ Tests use Bun's built-in test runner:
 ```typescript
 import { describe, test, expect } from "bun:test";
 
-describe("Module", () => {
-  test("should do something", async () => {
+describe("Customers Module", () => {
+  test("should create customer", async () => {
     // Test implementation
   });
 });
@@ -186,3 +206,38 @@ The API is deployed to Cloudflare Workers:
 ## Live URL
 
 - **Production**: https://arroyyan.karnarupa.workers.dev
+
+## Business Features
+
+### Customer Management
+- Store customer contact information
+- Track customer notes and preferences
+- Link pets to customers
+
+### Product Inventory
+- Track stock levels
+- Low stock alerts
+- SKU management
+- Cost and price tracking
+- Profit margin calculation
+
+### Pet Records (Planned)
+- Pet profiles with medical history
+- Breed, age, weight tracking
+- Photo storage
+
+### Services (Planned)
+- Grooming services
+- Veterinary services
+- Boarding services
+- Price and duration management
+
+### Appointments (Planned)
+- Service booking system
+- Schedule management
+- Status tracking
+
+### Sales & POS (Planned)
+- Product sales recording
+- Payment method tracking
+- Sales reports
