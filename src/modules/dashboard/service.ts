@@ -3,7 +3,7 @@
  * Business logic untuk dashboard
  */
 
-import { db } from "../../db";
+import { createDb, type Bindings } from "../../db";
 import { sales, products, inventory, users } from "../../db/schema";
 import { eq, and, gte, lte, desc } from "drizzle-orm";
 
@@ -73,13 +73,14 @@ function getDateRange(period: "daily" | "weekly" | "monthly"): {
  * Returns: totalRevenue, lowStockCount, transactions
  */
 export async function getDashboardData(
+  db: ReturnType<typeof createDb>,
   period: "daily" | "weekly" | "monthly" = "daily"
 ): Promise<DashboardData> {
   // Get date range based on period
   const dateRange = getDateRange(period);
 
   // Get total revenue for the period
-  const totalRevenue = await getTotalRevenue(dateRange.startDate, dateRange.endDate);
+  const totalRevenue = await getTotalRevenue(db, dateRange.startDate, dateRange.endDate);
 
   // Get low stock count
   const lowStockCount = await getLowStockCount();
@@ -101,6 +102,7 @@ export async function getDashboardData(
  * Get total revenue for a date range
  */
 export async function getTotalRevenue(
+  db: ReturnType<typeof createDb>,
   startDate: string,
   endDate: string
 ): Promise<number> {

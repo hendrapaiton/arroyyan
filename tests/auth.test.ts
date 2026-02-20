@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
-import { db } from "../src/db/index.ts";
+import { db } from "../src/db/local.ts";
 import { users, sessions } from "../src/db/schema.ts";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";

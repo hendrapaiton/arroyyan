@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { eq, like, or, and } from "drizzle-orm";
-import { db } from "../../db";
+import { createDb, type Bindings, type Variables } from "../../db";
 import { products, inventory, type NewProduct, type NewInventory } from "../../db/schema";
 import { createProductSchema, updateProductSchema, productQuerySchema } from "./schema";
 import { authMiddleware, requireRole } from "../../middlewares/auth";
@@ -54,7 +54,7 @@ produk.post("/", authMiddleware, requireRole("admin"), async (c) => {
     const { name, sku, sellingPrice } = validation.data;
 
     // Cek SKU sudah ada (case-insensitive)
-    const existingProduct = await db.query.products.findFirst({
+    const existingProduct = await createDb(c.env.DB).query.products.findFirst({
       where: eq(products.sku, sku.toUpperCase()),
     });
 
@@ -72,7 +72,7 @@ produk.post("/", authMiddleware, requireRole("admin"), async (c) => {
     const timestamp = now();
 
     // Insert product
-    await db.insert(products).values({
+    await createDb(c.env.DB).insert(products).values({
       id: productId,
       name,
       sku: sku.toUpperCase(),
@@ -83,7 +83,7 @@ produk.post("/", authMiddleware, requireRole("admin"), async (c) => {
     } satisfies NewProduct);
 
     // Create inventory record with 0 stock
-    await db.insert(inventory).values({
+    await createDb(c.env.DB).insert(inventory).values({
       id: `inv_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
       productId,
       warehouseStock: 0,
@@ -94,7 +94,7 @@ produk.post("/", authMiddleware, requireRole("admin"), async (c) => {
     } satisfies NewInventory);
 
     // Fetch created product
-    const createdProduct = await db.query.products.findFirst({
+    const createdProduct = await createDb(c.env.DB).query.products.findFirst({
       where: eq(products.id, productId),
       with: {
         inventory: true,
@@ -159,7 +159,7 @@ produk.get("/", authMiddleware, async (c) => {
     }
 
     // Fetch products with inventory
-    const allProducts = await db.query.products.findMany({
+    const allProducts = await createDb(c.env.DB).query.products.findMany({
       where: conditions.length > 0 ? and(...conditions) : undefined,
       with: {
         inventory: true,
@@ -209,7 +209,7 @@ produk.get("/:id", authMiddleware, async (c) => {
   try {
     const id = c.req.param("id");
 
-    const product = await db.query.products.findFirst({
+    const product = await createDb(c.env.DB).query.products.findFirst({
       where: eq(products.id, id),
       with: {
         inventory: true,
@@ -253,7 +253,7 @@ produk.get("/:id/stok", authMiddleware, async (c) => {
   try {
     const id = c.req.param("id");
 
-    const product = await db.query.products.findFirst({
+    const product = await createDb(c.env.DB).query.products.findFirst({
       where: eq(products.id, id),
       with: {
         inventory: true,
@@ -318,7 +318,7 @@ produk.put("/:id", authMiddleware, requireRole("admin"), async (c) => {
     }
 
     // Check product exists
-    const existingProduct = await db.query.products.findFirst({
+    const existingProduct = await createDb(c.env.DB).query.products.findFirst({
       where: eq(products.id, id),
     });
 
@@ -346,10 +346,10 @@ produk.put("/:id", authMiddleware, requireRole("admin"), async (c) => {
     }
 
     // Update product
-    await db.update(products).set(updateData).where(eq(products.id, id));
+    await createDb(c.env.DB).update(products).set(updateData).where(eq(products.id, id));
 
     // Fetch updated product
-    const updatedProduct = await db.query.products.findFirst({
+    const updatedProduct = await createDb(c.env.DB).query.products.findFirst({
       where: eq(products.id, id),
       with: {
         inventory: true,
@@ -385,7 +385,7 @@ produk.delete("/:id", authMiddleware, requireRole("admin"), async (c) => {
     const id = c.req.param("id");
 
     // Check product exists
-    const product = await db.query.products.findFirst({
+    const product = await createDb(c.env.DB).query.products.findFirst({
       where: eq(products.id, id),
       with: {
         inventory: true,
@@ -427,7 +427,7 @@ produk.delete("/:id", authMiddleware, requireRole("admin"), async (c) => {
     }
 
     // Soft delete
-    await db
+    await createDb(c.env.DB)
       .update(products)
       .set({
         isActive: false,
@@ -467,7 +467,7 @@ produk.patch("/:id/activate", authMiddleware, requireRole("admin"), async (c) =>
     }
 
     // Check product exists
-    const product = await db.query.products.findFirst({
+    const product = await createDb(c.env.DB).query.products.findFirst({
       where: eq(products.id, id),
       with: {
         inventory: true,

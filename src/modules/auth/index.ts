@@ -3,11 +3,11 @@ import { z } from "zod";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { db } from "../../db";
+import { createDb, type Bindings, type Variables } from "../../db";
 import { users, sessions, type UserRole } from "../../db/schema";
 import { config } from "../../config";
 
-const auth = new Hono();
+const auth = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 // ============================================================================
 // VALIDATION SCHEMAS
@@ -72,7 +72,7 @@ auth.post("/register", async (c) => {
     const { username, name, password, role } = validation.data;
 
     // Cek username sudah ada
-    const existingUser = await db.query.users.findFirst({
+    const existingUser = await createDb(c.env.DB).query.users.findFirst({
       where: eq(users.username, username),
     });
 
@@ -93,7 +93,7 @@ auth.post("/register", async (c) => {
     const now = new Date().toISOString();
 
     // Insert user
-    await db.insert(users).values({
+    await createDb(c.env.DB).insert(users).values({
       id: userId,
       username,
       name,
@@ -151,7 +151,7 @@ auth.post("/login", async (c) => {
     const { username, password } = validation.data;
 
     // Find user by username
-    const user = await db.query.users.findFirst({
+    const user = await createDb(c.env.DB).query.users.findFirst({
       where: eq(users.username, username),
     });
 
@@ -191,7 +191,7 @@ auth.post("/login", async (c) => {
     const sessionId = generateSessionId();
     const now = new Date().toISOString();
 
-    await db.insert(sessions).values({
+    await createDb(c.env.DB).insert(sessions).values({
       id: sessionId,
       userId: user.id,
       token,
@@ -249,7 +249,7 @@ auth.post("/logout", async (c) => {
     const token = authHeader.substring(7);
 
     // Delete session dari database
-    await db.delete(sessions).where(eq(sessions.token, token));
+    await createDb(c.env.DB).delete(sessions).where(eq(sessions.token, token));
 
     return c.json({
       success: true,
@@ -295,7 +295,7 @@ auth.get("/me", async (c) => {
     };
 
     // Get user from database
-    const user = await db.query.users.findFirst({
+    const user = await createDb(c.env.DB).query.users.findFirst({
       where: eq(users.id, decoded.userId),
       columns: {
         password: false, // Jangan return password

@@ -3,7 +3,7 @@
  * Business logic untuk transfer stok dari gudang ke etalase
  */
 
-import { db } from "../../db";
+import { createDb, type Bindings } from "../../db";
 import {
   stockTransfers,
   stockTransferItems,
@@ -120,6 +120,7 @@ function now(): string {
  * - Check warehouse stock is sufficient
  */
 export async function validateTransferItems(
+  db: ReturnType<typeof createDb>,
   items: TransferItemInput[]
 ): Promise<void> {
   for (const item of items) {
@@ -161,12 +162,13 @@ export async function validateTransferItems(
  * - Updates inventory (warehouse - quantity, display + quantity)
  */
 export async function createTransfer(
+  db: ReturnType<typeof createDb>,
   input: CreateTransferInput
 ): Promise<TransferWithDetails> {
   const { transferDate, notes, items, performedBy } = input;
 
   // Validate items first
-  await validateTransferItems(items);
+  await validateTransferItems(db, items);
 
   const transferId = generateId("trf");
   const transferNumber = generateTransferNumber();
@@ -230,6 +232,7 @@ export async function createTransfer(
  * Get transfer by ID with full details
  */
 export async function getTransferById(
+  db: ReturnType<typeof createDb>,
   id: string
 ): Promise<TransferWithDetails> {
   const transfer = await db.query.stockTransfers.findFirst({

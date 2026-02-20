@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { eq, and, desc, like, or, gte, lte } from "drizzle-orm";
-import { db } from "../../db";
+import { createDb, type Bindings, type Variables } from "../../db";
 import {
   suppliers,
   supplyOrders,
@@ -21,7 +21,7 @@ import {
 import { authMiddleware, requireRole } from "../../middlewares/auth";
 import { handleErrorJson } from "../../lib/errors";
 
-const pasokan = new Hono();
+const pasokan = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 // ============================================================================
 // HELPER FUNCTIONS
@@ -83,7 +83,7 @@ pasokan.post("/suppliers", authMiddleware, requireRole("admin"), async (c) => {
     const supplierId = generateId("supp");
     const timestamp = now();
 
-    await db.insert(suppliers).values({
+    await createDb(c.env.DB).insert(suppliers).values({
       id: supplierId,
       name,
       contactPerson: contactPerson || null,
@@ -95,7 +95,7 @@ pasokan.post("/suppliers", authMiddleware, requireRole("admin"), async (c) => {
     } satisfies NewSupplier);
 
     // Fetch created supplier
-    const createdSupplier = await db.query.suppliers.findFirst({
+    const createdSupplier = await createDb(c.env.DB).query.suppliers.findFirst({
       where: eq(suppliers.id, supplierId),
     });
 
@@ -155,7 +155,7 @@ pasokan.get("/suppliers", authMiddleware, async (c) => {
     }
 
     // Fetch suppliers
-    const allSuppliers = await db.query.suppliers.findMany({
+    const allSuppliers = await createDb(c.env.DB).query.suppliers.findMany({
       where: conditions.length > 0 ? and(...conditions) : undefined,
       orderBy: (suppliers, { desc }) => [desc(suppliers.createdAt)],
     });
@@ -277,10 +277,10 @@ pasokan.put("/suppliers/:id", authMiddleware, requireRole("admin"), async (c) =>
     }
 
     // Update supplier
-    await db.update(suppliers).set(updateData).where(eq(suppliers.id, id));
+    await createDb(c.env.DB).update(suppliers).set(updateData).where(eq(suppliers.id, id));
 
     // Fetch updated supplier
-    const updatedSupplier = await db.query.suppliers.findFirst({
+    const updatedSupplier = await createDb(c.env.DB).query.suppliers.findFirst({
       where: eq(suppliers.id, id),
     });
 
@@ -320,7 +320,7 @@ pasokan.delete("/suppliers/:id", authMiddleware, requireRole("admin"), async (c)
     }
 
     // Check if supplier has orders
-    const orderCount = await db.query.supplyOrders.findMany({
+    const orderCount = await createDb(c.env.DB).query.supplyOrders.findMany({
       where: eq(supplyOrders.supplierId, id),
       columns: { id: true },
     });
@@ -411,7 +411,7 @@ pasokan.post("/orders", authMiddleware, requireRole("admin"), async (c) => {
 
     // Validate items - check products exist and are active
     for (const item of items) {
-      const product = await db.query.products.findFirst({
+      const product = await createDb(c.env.DB).query.products.findFirst({
         where: eq(products.id, item.productId),
       });
 
@@ -458,14 +458,14 @@ pasokan.post("/orders", authMiddleware, requireRole("admin"), async (c) => {
       createdAt: timestamp,
       updatedAt: timestamp,
     };
-    await db.insert(supplyOrders).values(orderInsert);
+    await createDb(c.env.DB).insert(supplyOrders).values(orderInsert);
 
     // Insert supply order items and update inventory
     for (const item of items) {
       const subtotal = item.quantity * item.purchasePrice;
 
       // Insert item
-      await db.insert(supplyOrderItems).values({
+      await createDb(c.env.DB).insert(supplyOrderItems).values({
         id: generateId("supi"),
         supplyOrderId: orderId,
         productId: item.productId,
@@ -476,7 +476,7 @@ pasokan.post("/orders", authMiddleware, requireRole("admin"), async (c) => {
       } satisfies NewSupplyOrderItem);
 
       // Update inventory - add to warehouse stock
-      const existingInventory = await db.query.inventory.findFirst({
+      const existingInventory = await createDb(c.env.DB).query.inventory.findFirst({
         where: eq(inventory.productId, item.productId),
       });
 
@@ -491,7 +491,7 @@ pasokan.post("/orders", authMiddleware, requireRole("admin"), async (c) => {
           .where(eq(inventory.productId, item.productId));
       } else {
         // Create new inventory record if not exists
-        await db.insert(inventory).values({
+        await createDb(c.env.DB).insert(inventory).values({
           id: generateId("inv"),
           productId: item.productId,
           warehouseStock: item.quantity,
@@ -504,7 +504,7 @@ pasokan.post("/orders", authMiddleware, requireRole("admin"), async (c) => {
     }
 
     // Fetch created order with items
-    const createdOrder = await db.query.supplyOrders.findFirst({
+    const createdOrder = await createDb(c.env.DB).query.supplyOrders.findFirst({
       where: eq(supplyOrders.id, orderId),
       with: {
         supplier: true,
@@ -569,7 +569,7 @@ pasokan.get("/orders", authMiddleware, async (c) => {
     }
 
     // Fetch orders
-    const allOrders = await db.query.supplyOrders.findMany({
+    const allOrders = await createDb(c.env.DB).query.supplyOrders.findMany({
       where: conditions.length > 0 ? and(...conditions) : undefined,
       with: {
         supplier: true,
@@ -616,7 +616,7 @@ pasokan.get("/orders/:id", authMiddleware, async (c) => {
   try {
     const id = c.req.param("id");
 
-    const order = await db.query.supplyOrders.findFirst({
+    const order = await createDb(c.env.DB).query.supplyOrders.findFirst({
       where: eq(supplyOrders.id, id),
       with: {
         supplier: true,
@@ -658,7 +658,7 @@ pasokan.get("/orders/:id/items", authMiddleware, async (c) => {
     const id = c.req.param("id");
 
     // Check order exists
-    const order = await db.query.supplyOrders.findFirst({
+    const order = await createDb(c.env.DB).query.supplyOrders.findFirst({
       where: eq(supplyOrders.id, id),
     });
 
@@ -673,7 +673,7 @@ pasokan.get("/orders/:id/items", authMiddleware, async (c) => {
     }
 
     // Fetch items
-    const items = await db.query.supplyOrderItems.findMany({
+    const items = await createDb(c.env.DB).query.supplyOrderItems.findMany({
       where: eq(supplyOrderItems.supplyOrderId, id),
       with: {
         product: true,
