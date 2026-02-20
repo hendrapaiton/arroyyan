@@ -87,6 +87,19 @@ bun run dev
 
 The API will be available at `http://localhost:8787`
 
+## 🌐 Live Deployment
+
+**Production URL:** https://arroyyan.karnarupa.workers.dev
+
+### Live Endpoints
+
+| Endpoint | URL |
+|----------|-----|
+| Health Check | `https://arroyyan.karnarupa.workers.dev/health` |
+| Auth Signup | `https://arroyyan.karnarupa.workers.dev/auth/signup` |
+| Auth Signin | `https://arroyyan.karnarupa.workers.dev/auth/signin` |
+| Todos (Protected) | `https://arroyyan.karnarupa.workers.dev/todos` |
+
 ## 📡 API Endpoints
 
 ### Health Check
