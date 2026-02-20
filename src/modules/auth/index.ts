@@ -343,4 +343,95 @@ auth.get("/me", async (c) => {
   }
 });
 
+/**
+ * GET /api/auth/session
+ * Get current session info (user + session details)
+ */
+auth.get("/session", async (c) => {
+  const authHeader = c.req.header("Authorization");
+
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return c.json(
+      {
+        success: false,
+        error: "Token tidak ditemukan",
+      },
+      401
+    );
+  }
+
+  const token = authHeader.substring(7);
+
+  try {
+    // Verify token
+    const decoded = jwt.verify(token, config.jwt.secret) as {
+      userId: string;
+      username: string;
+      role: UserRole;
+      exp: number;
+    };
+
+    // Get user from database
+    const user = await createDb(c.env.DB).query.users.findFirst({
+      where: eq(users.id, decoded.userId),
+      columns: {
+        password: false,
+      },
+    });
+
+    if (!user) {
+      return c.json(
+        {
+          success: false,
+          error: "User tidak ditemukan",
+        },
+        404
+      );
+    }
+
+    // Get session from database
+    const session = await createDb(c.env.DB).query.sessions.findFirst({
+      where: eq(sessions.token, token),
+    });
+
+    return c.json({
+      success: true,
+      data: {
+        user: {
+          id: user.id,
+          username: user.username,
+          name: user.name,
+          role: user.role,
+        },
+        session: session ? {
+          id: session.id,
+          expiresAt: session.expiresAt,
+          createdAt: session.createdAt,
+          ipAddress: session.ipAddress,
+          userAgent: session.userAgent,
+        } : null,
+        tokenExpiresAt: new Date(decoded.exp * 1000).toISOString(),
+      },
+    });
+  } catch (error) {
+    if (error instanceof jwt.TokenExpiredError) {
+      return c.json(
+        {
+          success: false,
+          error: "Token sudah expired",
+        },
+        401
+      );
+    }
+
+    return c.json(
+      {
+        success: false,
+        error: "Token tidak valid",
+      },
+      401
+    );
+  }
+});
+
 export { auth };
