@@ -43,6 +43,12 @@ export function createApp() {
   );
 
   // Routes
+  app.get("/", (c) => {
+    return c.json({
+      name: "Karnaval Purwarupa",
+      url: "www.karnarupa.com",
+    });
+  });
   app.route("/health", healthRoutes);
   app.route("/auth", authRoutes);
   app.route("/todos", todoRoutes);
