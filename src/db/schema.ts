@@ -1,229 +1,303 @@
-import { sqliteTable, text, integer, real } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, index } from "drizzle-orm/sqlite-core";
+import { relations } from "drizzle-orm";
 
-// ============================================
-// Better Auth Tables
-// ============================================
+// ============================================================================
+// AUTH SCHEMA (Better Auth with JWT - Username Based)
+// ============================================================================
 
-export const user = sqliteTable("user", {
+export const users = sqliteTable("users", {
   id: text("id").primaryKey(),
-  name: text("name").notNull(),
-  email: text("email").notNull().unique(),
-  emailVerified: integer("email_verified", { mode: "boolean" }).notNull().default(false),
+  username: text("username").notNull().unique(), // Login identifier
+  name: text("name").notNull(), // Full name
+  password: text("password").notNull(), // Hashed password
+  role: text("role", { enum: ["admin", "cashier", "guest"] }).notNull().default("guest"),
   image: text("image"),
-  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
-  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
-});
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+}, (table) => ({
+  usernameIdx: index("users_username_idx").on(table.username),
+  roleIdx: index("users_role_idx").on(table.role),
+}));
 
-export const session = sqliteTable("session", {
+export const sessions = sqliteTable("sessions", {
   id: text("id").primaryKey(),
-  userId: text("user_id")
-    .notNull()
-    .references(() => user.id, { onDelete: "cascade" }),
-  expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
-  token: text("token").notNull().unique(),
-  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
-  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  token: text("token").notNull().unique(), // JWT token
+  expiresAt: text("expires_at").notNull(),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
   ipAddress: text("ip_address"),
   userAgent: text("user_agent"),
-});
+}, (table) => ({
+  userIdIdx: index("sessions_user_id_idx").on(table.userId),
+  tokenIdx: index("sessions_token_idx").on(table.token),
+  expiresAtIdx: index("sessions_expires_at_idx").on(table.expiresAt),
+}));
 
-export const account = sqliteTable("account", {
+export const accounts = sqliteTable("accounts", {
   id: text("id").primaryKey(),
-  userId: text("user_id")
-    .notNull()
-    .references(() => user.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   accountId: text("account_id").notNull(),
   providerId: text("provider_id").notNull(),
   accessToken: text("access_token"),
   refreshToken: text("refresh_token"),
-  accessTokenExpiresAt: integer("access_token_expires_at", { mode: "timestamp" }),
-  refreshTokenExpiresAt: integer("refresh_token_expires_at", { mode: "timestamp" }),
-  scope: text("scope"),
-  idToken: text("id_token"),
-  password: text("password"),
-  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
-  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
 });
 
-export const verification = sqliteTable("verification", {
-  id: text("id").primaryKey(),
-  identifier: text("identifier").notNull(),
-  value: text("value").notNull(),
-  expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
-  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
-  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
-});
+// ============================================================================
+// CORE BUSINESS SCHEMA
+// ============================================================================
 
-// ============================================
-// Petshop Application Tables
-// ============================================
-
-/**
- * Customers table - stores customer/pet owner information
- */
-export const customer = sqliteTable("customer", {
+// -----------------------------------------------------------------------------
+// Products - Master data produk yang dijual
+// -----------------------------------------------------------------------------
+export const products = sqliteTable("products", {
   id: text("id").primaryKey(),
-  userId: text("user_id")
-    .notNull()
-    .references(() => user.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
-  email: text("email").notNull().unique(),
-  phone: text("phone").notNull(),
+  sku: text("sku").notNull().unique(), // Stock Keeping Unit - kode unik produk
+  sellingPrice: real("selling_price").notNull(), // Harga jual satuan
+  isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+}, (table) => ({
+  skuIdx: index("products_sku_idx").on(table.sku),
+  isActiveIdx: index("products_is_active_idx").on(table.isActive),
+  nameIdx: index("products_name_idx").on(table.name),
+}));
+
+// -----------------------------------------------------------------------------
+// Suppliers - Data supplier/pemasok
+// -----------------------------------------------------------------------------
+export const suppliers = sqliteTable("suppliers", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  contactPerson: text("contact_person"),
+  phone: text("phone"),
+  email: text("email"),
   address: text("address"),
-  notes: text("notes"),
-  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
-  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
-});
-
-/**
- * Pets table - stores pet information
- */
-export const pet = sqliteTable("pet", {
-  id: text("id").primaryKey(),
-  customerId: text("customer_id")
-    .notNull()
-    .references(() => customer.id, { onDelete: "cascade" }),
-  name: text("name").notNull(),
-  species: text("species").notNull(), // dog, cat, bird, etc.
-  breed: text("breed"),
-  dateOfBirth: integer("date_of_birth", { mode: "timestamp" }),
-  gender: text("gender"), // male, female
-  weight: real("weight"), // in kg
-  color: text("color"),
-  medicalNotes: text("medical_notes"),
-  photoUrl: text("photo_url"),
   isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
-  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
-  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
 });
 
-/**
- * Services table - stores available petshop services
- */
-export const service = sqliteTable("service", {
+// -----------------------------------------------------------------------------
+// Supply Orders - Penerimaan pasokan dari supplier ke gudang
+// Setiap supply order menambah stok gudang
+// -----------------------------------------------------------------------------
+export const supplyOrders = sqliteTable("supply_orders", {
   id: text("id").primaryKey(),
-  name: text("name").notNull(),
-  description: text("description"),
-  price: real("price").notNull(),
-  duration: integer("duration"), // in minutes
-  category: text("category").notNull(), // grooming, veterinary, boarding, etc.
-  isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
-  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
-  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
-});
-
-/**
- * Products table - stores petshop products inventory
- */
-export const product = sqliteTable("product", {
-  id: text("id").primaryKey(),
-  name: text("name").notNull(),
-  description: text("description"),
-  sku: text("sku").notNull().unique(),
-  category: text("category").notNull(), // food, toys, accessories, etc.
-  price: real("price").notNull(),
-  cost: real("cost"), // cost price for profit calculation
-  stock: integer("stock").notNull().default(0),
-  minStock: integer("min_stock").notNull().default(5), // reorder point
-  unit: text("unit"), // kg, pcs, pack, etc.
-  photoUrl: text("photo_url"),
-  isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
-  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
-  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
-});
-
-/**
- * Appointments table - stores service appointments/bookings
- */
-export const appointment = sqliteTable("appointment", {
-  id: text("id").primaryKey(),
-  petId: text("pet_id")
-    .notNull()
-    .references(() => pet.id, { onDelete: "cascade" }),
-  serviceId: text("service_id")
-    .notNull()
-    .references(() => service.id, { onDelete: "restrict" }),
-  userId: text("user_id")
-    .notNull()
-    .references(() => user.id, { onDelete: "cascade" }),
-  appointmentDate: integer("appointment_date", { mode: "timestamp" }).notNull(),
-  status: text("status").notNull().default("pending"), // pending, confirmed, completed, cancelled
+  orderNumber: text("order_number").notNull().unique(), // Nomor referensi supply order
+  supplierId: text("supplier_id").notNull().references(() => suppliers.id, { onDelete: "restrict" }),
+  orderDate: text("order_date").notNull(), // Tanggal penerimaan barang
+  totalAmount: real("total_amount").notNull().default(0), // Total nilai pembelian
   notes: text("notes"),
-  totalPrice: real("total_price"),
-  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
-  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
 });
 
-/**
- * Sales table - stores product sales transactions
- */
-export const sale = sqliteTable("sale", {
+export const supplyOrderItems = sqliteTable("supply_order_items", {
   id: text("id").primaryKey(),
-  customerId: text("customer_id")
-    .references(() => customer.id, { onDelete: "set null" }),
-  userId: text("user_id")
-    .notNull()
-    .references(() => user.id, { onDelete: "cascade" }),
-  saleDate: integer("sale_date", { mode: "timestamp" }).notNull(),
-  totalAmount: real("total_amount").notNull(),
-  discount: real("discount").default(0),
-  finalAmount: real("final_amount").notNull(),
-  paymentMethod: text("payment_method").notNull(), // cash, card, transfer
+  supplyOrderId: text("supply_order_id").notNull().references(() => supplyOrders.id, { onDelete: "cascade" }),
+  productId: text("product_id").notNull().references(() => products.id, { onDelete: "restrict" }),
+  quantity: integer("quantity").notNull(), // Jumlah barang yang diterima
+  purchasePrice: real("purchase_price").notNull(), // Harga beli satuan dari supplier
+  subtotal: real("subtotal").notNull(), // quantity * purchasePrice
+  createdAt: text("created_at").notNull(),
+});
+
+// -----------------------------------------------------------------------------
+// Inventory - Stok barang di gudang dan etalase
+// Memisahkan stok gudang (warehouse) dan etalase (display)
+// -----------------------------------------------------------------------------
+export const inventory = sqliteTable("inventory", {
+  id: text("id").primaryKey(),
+  productId: text("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
+  warehouseStock: integer("warehouse_stock").notNull().default(0), // Stok di gudang
+  displayStock: integer("display_stock").notNull().default(0), // Stok di etalase
+  lastStockUpdate: text("last_stock_update").notNull(),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+// -----------------------------------------------------------------------------
+// Stock Transfers - Pemindahan stok dari gudang ke etalase
+// -----------------------------------------------------------------------------
+export const stockTransfers = sqliteTable("stock_transfers", {
+  id: text("id").primaryKey(),
+  transferNumber: text("transfer_number").notNull().unique(), // Nomor referensi transfer
+  transferDate: text("transfer_date").notNull(), // Tanggal transfer
   notes: text("notes"),
-  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  performedBy: text("performed_by").references(() => users.id, { onDelete: "set null" }),
+  createdAt: text("created_at").notNull(),
 });
 
-/**
- * Sale Items table - stores individual items in each sale
- */
-export const saleItem = sqliteTable("sale_item", {
+export const stockTransferItems = sqliteTable("stock_transfer_items", {
   id: text("id").primaryKey(),
-  saleId: text("sale_id")
-    .notNull()
-    .references(() => sale.id, { onDelete: "cascade" }),
-  productId: text("product_id")
-    .notNull()
-    .references(() => product.id, { onDelete: "restrict" }),
-  quantity: integer("quantity").notNull(),
-  price: real("price").notNull(), // price at time of sale
-  subtotal: real("subtotal").notNull(),
+  transferId: text("transfer_id").notNull().references(() => stockTransfers.id, { onDelete: "cascade" }),
+  productId: text("product_id").notNull().references(() => products.id, { onDelete: "restrict" }),
+  quantity: integer("quantity").notNull(), // Jumlah yang dipindahkan
+  createdAt: text("created_at").notNull(),
 });
 
-// Export all tables for Drizzle
-export const schema = {
-  user,
-  session,
-  account,
-  verification,
-  customer,
-  pet,
-  service,
-  product,
-  appointment,
-  sale,
-  saleItem,
-};
+// -----------------------------------------------------------------------------
+// Sales - Transaksi penjualan di kasir
+// -----------------------------------------------------------------------------
+export const sales = sqliteTable("sales", {
+  id: text("id").primaryKey(),
+  saleNumber: text("sale_number").notNull().unique(), // Nomor referensi transaksi
+  saleDate: text("sale_date").notNull(), // Tanggal transaksi
+  referenceNumber: text("reference_number"), // Nomor referensi tambahan (jika ada)
+  totalAmount: real("total_amount").notNull().default(0), // Total penjualan
+  paymentMethod: text("payment_method", { enum: ["cash", "qris"] }).notNull(), // Metode pembayaran
+  paidAmount: real("paid_amount").notNull(), // Jumlah yang dibayar
+  changeAmount: real("change_amount").notNull().default(0), // Kembalian
+  notes: text("notes"),
+  cashierId: text("cashier_id").references(() => users.id, { onDelete: "set null" }),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+}, (table) => ({
+  saleDateIdx: index("sales_sale_date_idx").on(table.saleDate),
+  saleNumberIdx: index("sales_sale_number_idx").on(table.saleNumber),
+  cashierIdIdx: index("sales_cashier_id_idx").on(table.cashierId),
+}));
 
-// Type exports
-export type User = typeof user.$inferSelect;
-export type NewUser = typeof user.$inferInsert;
-export type Session = typeof session.$inferSelect;
-export type NewSession = typeof session.$inferInsert;
-export type Account = typeof account.$inferSelect;
-export type NewAccount = typeof account.$inferInsert;
-export type Verification = typeof verification.$inferSelect;
-export type NewVerification = typeof verification.$inferInsert;
-export type Customer = typeof customer.$inferSelect;
-export type NewCustomer = typeof customer.$inferInsert;
-export type Pet = typeof pet.$inferSelect;
-export type NewPet = typeof pet.$inferInsert;
-export type Service = typeof service.$inferSelect;
-export type NewService = typeof service.$inferInsert;
-export type Product = typeof product.$inferSelect;
-export type NewProduct = typeof product.$inferInsert;
-export type Appointment = typeof appointment.$inferSelect;
-export type NewAppointment = typeof appointment.$inferInsert;
-export type Sale = typeof sale.$inferSelect;
-export type NewSale = typeof sale.$inferInsert;
-export type SaleItem = typeof saleItem.$inferSelect;
-export type NewSaleItem = typeof saleItem.$inferInsert;
+export const saleItems = sqliteTable("sale_items", {
+  id: text("id").primaryKey(),
+  saleId: text("sale_id").notNull().references(() => sales.id, { onDelete: "cascade" }),
+  productId: text("product_id").notNull().references(() => products.id, { onDelete: "restrict" }),
+  quantity: integer("quantity").notNull(), // Jumlah barang yang dijual
+  unitPrice: real("unit_price").notNull(), // Harga jual satuan saat transaksi
+  subtotal: real("subtotal").notNull(), // quantity * unitPrice
+  createdAt: text("created_at").notNull(),
+});
+
+// ============================================================================
+// RELATIONS
+// ============================================================================
+
+export const usersRelations = relations(users, ({ many }) => ({
+  sessions: many(sessions),
+  accounts: many(accounts),
+}));
+
+export const sessionsRelations = relations(sessions, ({ one }) => ({
+  user: one(users, {
+    fields: [sessions.userId],
+    references: [users.id],
+  }),
+}));
+
+export const accountsRelations = relations(accounts, ({ one }) => ({
+  user: one(users, {
+    fields: [accounts.userId],
+    references: [users.id],
+  }),
+}));
+
+export const productsRelations = relations(products, ({ many }) => ({
+  supplyOrderItems: many(supplyOrderItems),
+  stockTransferItems: many(stockTransferItems),
+  saleItems: many(saleItems),
+  inventory: many(inventory),
+}));
+
+export const suppliersRelations = relations(suppliers, ({ many }) => ({
+  supplyOrders: many(supplyOrders),
+}));
+
+export const supplyOrdersRelations = relations(supplyOrders, ({ one, many }) => ({
+  supplier: one(suppliers, {
+    fields: [supplyOrders.supplierId],
+    references: [suppliers.id],
+  }),
+  items: many(supplyOrderItems),
+}));
+
+export const supplyOrderItemsRelations = relations(supplyOrderItems, ({ one }) => ({
+  supplyOrder: one(supplyOrders, {
+    fields: [supplyOrderItems.supplyOrderId],
+    references: [supplyOrders.id],
+  }),
+  product: one(products, {
+    fields: [supplyOrderItems.productId],
+    references: [products.id],
+  }),
+}));
+
+export const inventoryRelations = relations(inventory, ({ one }) => ({
+  product: one(products, {
+    fields: [inventory.productId],
+    references: [products.id],
+  }),
+}));
+
+export const stockTransfersRelations = relations(stockTransfers, ({ one, many }) => ({
+  performedBy: one(users, {
+    fields: [stockTransfers.performedBy],
+    references: [users.id],
+  }),
+  items: many(stockTransferItems),
+}));
+
+export const stockTransferItemsRelations = relations(stockTransferItems, ({ one }) => ({
+  transfer: one(stockTransfers, {
+    fields: [stockTransferItems.transferId],
+    references: [stockTransfers.id],
+  }),
+  product: one(products, {
+    fields: [stockTransferItems.productId],
+    references: [products.id],
+  }),
+}));
+
+export const salesRelations = relations(sales, ({ one, many }) => ({
+  cashier: one(users, {
+    fields: [sales.cashierId],
+    references: [users.id],
+  }),
+  items: many(saleItems),
+}));
+
+export const saleItemsRelations = relations(saleItems, ({ one }) => ({
+  sale: one(sales, {
+    fields: [saleItems.saleId],
+    references: [sales.id],
+  }),
+  product: one(products, {
+    fields: [saleItems.productId],
+    references: [products.id],
+  }),
+}));
+
+// ============================================================================
+// TYPE EXPORTS (untuk TypeScript)
+// ============================================================================
+
+export type User = typeof users.$inferSelect;
+export type NewUser = typeof users.$inferInsert;
+export type Session = typeof sessions.$inferSelect;
+export type NewSession = typeof sessions.$inferInsert;
+export type Account = typeof accounts.$inferSelect;
+export type NewAccount = typeof accounts.$inferInsert;
+
+export type UserRole = "admin" | "cashier" | "guest";
+
+export type Product = typeof products.$inferSelect;
+export type NewProduct = typeof products.$inferInsert;
+export type Supplier = typeof suppliers.$inferSelect;
+export type NewSupplier = typeof suppliers.$inferInsert;
+export type SupplyOrder = typeof supplyOrders.$inferSelect;
+export type NewSupplyOrder = typeof supplyOrders.$inferInsert;
+export type SupplyOrderItem = typeof supplyOrderItems.$inferSelect;
+export type NewSupplyOrderItem = typeof supplyOrderItems.$inferInsert;
+export type Inventory = typeof inventory.$inferSelect;
+export type NewInventory = typeof inventory.$inferInsert;
+export type StockTransfer = typeof stockTransfers.$inferSelect;
+export type NewStockTransfer = typeof stockTransfers.$inferInsert;
+export type StockTransferItem = typeof stockTransferItems.$inferSelect;
+export type NewStockTransferItem = typeof stockTransferItems.$inferInsert;
+export type Sale = typeof sales.$inferSelect;
+export type NewSale = typeof sales.$inferInsert;
+export type SaleItem = typeof saleItems.$inferSelect;
+export type NewSaleItem = typeof saleItems.$inferInsert;

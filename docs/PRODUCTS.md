@@ -1,251 +1,113 @@
-# Products Module
-
-The products module manages product inventory in the petshop system.
+# Modul Produk - Dokumentasi
 
 ## Database Schema
 
-### Product Table
-| Column | Type | Description |
-|--------|------|-------------|
-| id | text | Primary key (nanoid) |
-| name | text | Product name |
-| description | text | Product description |
-| sku | text | Unique SKU code |
-| category | text | Category (food, toys, accessories, etc.) |
-| price | real | Selling price |
-| cost | real | Cost price (for profit calculation) |
-| stock | integer | Current stock quantity |
-| minStock | integer | Reorder point (low stock threshold) |
-| unit | text | Unit of measurement (kg, pcs, pack) |
-| photoUrl | text | Product photo URL |
-| isActive | boolean | Active status (soft delete) |
-| createdAt | timestamp | Creation date |
-| updatedAt | timestamp | Last update date |
+### Tabel `products` (tabel utama)
+
+| Kolom | Tipe | Constraint | Deskripsi |
+|-------|------|------------|-----------|
+| `id` | TEXT | PRIMARY KEY | ID unik produk |
+| `name` | TEXT | NOT NULL | Nama produk |
+| `sku` | TEXT | UNIQUE NOT NULL | Kode unik produk, max 7 char alphanumeric |
+| `selling_price` | REAL | NOT NULL | Harga jual, min. 1000 |
+| `is_active` | BOOLEAN | DEFAULT true | Status produk (aktif/non-aktif) |
+| `created_at` | TEXT | NOT NULL | Tanggal pembuatan |
+| `updated_at` | TEXT | NOT NULL | Tanggal update terakhir |
+
+### Tabel `inventory` (tracking stok)
+
+| Kolom | Tipe | Constraint | Deskripsi |
+|-------|------|------------|-----------|
+| `id` | TEXT | PRIMARY KEY | ID unik inventory |
+| `product_id` | TEXT | FK → products | Relasi ke produk (1:1) |
+| `warehouse_stock` | INTEGER | DEFAULT 0 | Stok di gudang |
+| `display_stock` | INTEGER | DEFAULT 0 | Stok di etalase |
+| `last_stock_update` | TEXT | NOT NULL | Tanggal update stok terakhir |
+| `created_at` | TEXT | NOT NULL | Tanggal pembuatan |
+| `updated_at` | TEXT | NOT NULL | Tanggal update terakhir |
+
+---
+
+## Alur Bisnis
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  PRODUK (Master Data)                                       │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  1. CREATE produk baru                                      │
+│     └─ Input: nama, sku, harga_jual                        │
+│     └─ Auto: is_active=true, created_at, updated_at        │
+│     └─ Trigger: Buat record inventory (warehouse=0, display=0)
+│                                                             │
+│  2. READ daftar produk                                      │
+│     └─ List semua produk + stok (gudang & etalase)         │
+│     └─ Filter: active/inactive, search by nama/sku         │
+│                                                             │
+│  3. UPDATE produk                                           │
+│     └─ Update: nama, harga_jual                            │
+│     └─ Tidak bisa update stok langsung (harus via pasokan/etalase)
+│                                                             │
+│  4. DELETE (soft) produk                                    │
+│     └─ Set is_active=false                                 │
+│     └─ Tidak bisa delete kalau masih ada stok              │
+│                                                             │
+│  5. VALIDASI                                                │
+│     └─ SKU harus unik, max 7 karakter alphanumeric         │
+│     └─ Harga jual >= 1000                                  │
+│     └─ Stok etalase = 0 sebelum non-aktifkan produk        │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
 
 ## API Endpoints
 
-All product endpoints require authentication via Bearer token.
+| Method | Endpoint | Deskripsi |
+|--------|----------|-----------|
+| `POST` | `/api/produk` | Buat produk baru |
+| `GET` | `/api/produk` | List semua produk |
+| `GET` | `/api/produk/:id` | Detail produk |
+| `PUT` | `/api/produk/:id` | Update produk |
+| `DELETE` | `/api/produk/:id` | Soft delete produk |
+| `GET` | `/api/produk/:id/stok` | Cek stok produk |
 
-### GET /api/products
+---
 
-Get all products with optional filters.
+## Validasi (Zod Schema)
 
-**Query Parameters:**
-- `category` - Filter by category
-- `lowStock` - Filter for low stock items (true/false)
-
-**Headers:**
-```
-Authorization: Bearer <session_token>
-```
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "data": [
-    {
-      "id": "prod_abc123",
-      "name": "Dog Food Premium",
-      "description": "High-quality dog food",
-      "sku": "DF-001",
-      "category": "food",
-      "price": 150000,
-      "cost": 100000,
-      "stock": 50,
-      "minStock": 10,
-      "unit": "kg",
-      "isActive": true,
-      "createdAt": "2026-02-20T00:00:00.000Z",
-      "updatedAt": "2026-02-20T00:00:00.000Z"
-    }
-  ]
-}
-```
-
-### GET /api/products/low-stock
-
-Get products with stock below minimum threshold.
-
-**Headers:**
-```
-Authorization: Bearer <session_token>
-```
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "data": [
-    {
-      "id": "prod_xyz789",
-      "name": "Cat Litter",
-      "sku": "CL-001",
-      "stock": 3,
-      "minStock": 10
-    }
-  ]
-}
-```
-
-### GET /api/products/:id
-
-Get a single product by ID.
-
-**Headers:**
-```
-Authorization: Bearer <session_token>
-```
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "data": {
-    "id": "prod_abc123",
-    "name": "Dog Food Premium",
-    "sku": "DF-001",
-    "price": 150000,
-    "stock": 50
-  }
-}
-```
-
-### POST /api/products
-
-Create a new product.
-
-**Headers:**
-```
-Authorization: Bearer <session_token>
-Content-Type: application/json
-```
-
-**Request Body:**
-```json
-{
-  "name": "Dog Food Premium",
-  "description": "High-quality dog food for adult dogs",
-  "sku": "DF-001",
-  "category": "food",
-  "price": 150000,
-  "cost": 100000,
-  "stock": 50,
-  "minStock": 10,
-  "unit": "kg"
-}
-```
-
-**Response (201):**
-```json
-{
-  "success": true,
-  "message": "Product created successfully",
-  "data": {
-    "id": "prod_abc123",
-    "name": "Dog Food Premium",
-    "sku": "DF-001",
-    "price": 150000,
-    "stock": 50,
-    "isActive": true
-  }
-}
-```
-
-### PATCH /api/products/:id
-
-Update an existing product.
-
-**Headers:**
-```
-Authorization: Bearer <session_token>
-Content-Type: application/json
-```
-
-**Request Body:**
-```json
-{
-  "price": 160000,
-  "stock": 45
-}
-```
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "message": "Product updated successfully",
-  "data": {
-    "id": "prod_abc123",
-    "name": "Dog Food Premium",
-    "price": 160000,
-    "stock": 45
-  }
-}
-```
-
-### DELETE /api/products/:id
-
-Delete a product (soft delete - sets isActive to false).
-
-**Headers:**
-```
-Authorization: Bearer <session_token>
-```
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "message": "Product deleted successfully"
-}
-```
-
-## Features
-
-### Low Stock Alert
-
-Products with `stock < minStock` are considered low stock. Use the `/api/products/low-stock` endpoint to get these products for reordering.
-
-### Soft Delete
-
-Products are not physically deleted from the database. Instead, `isActive` is set to `false` to maintain historical sales data integrity.
-
-### Profit Calculation
-
-Profit margin can be calculated as: `profit = price - cost`
-
-## Usage Example
+### Create Product
 
 ```typescript
-// Create a product
-const response = await fetch('/api/products', {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${sessionToken}`
-  },
-  body: JSON.stringify({
-    name: 'Premium Cat Food',
-    sku: 'PCF-001',
-    category: 'food',
-    price: 75000,
-    cost: 50000,
-    stock: 100,
-    minStock: 20,
-    unit: 'kg'
-  })
-});
-
-// Get low stock products
-const lowStock = await fetch('/api/products/low-stock', {
-  headers: {
-    'Authorization': `Bearer ${sessionToken}`
-  }
-});
+{
+  name: string (min 3, max 100),
+  sku: string (uppercase alphanumeric, max 7 char),
+  sellingPrice: number (min 1000)
+}
 ```
 
-## Related Modules
+### Update Product
 
-- [Sales](./SALES.md) - Record product sales
-- [Customers](./CUSTOMERS.md) - Sell products to customers
+```typescript
+{
+  name?: string,
+  sellingPrice?: number (min 1000)
+}
+```
+
+**Catatan:** SKU tidak bisa diubah setelah produk dibuat.
+
+---
+
+## Business Rules
+
+1. **SKU Unik** - Setiap produk harus memiliki SKU yang unik (case-insensitive)
+2. **Harga Minimum** - Harga jual minimal Rp 1.000
+3. **Stok Awal** - Produk baru otomatis memiliki record inventory dengan stok 0
+4. **Soft Delete** - Produk tidak dihapus permanen, hanya di-set `is_active = false`
+5. **Stok Harus Kosong** - Tidak bisa non-aktifkan produk jika masih ada stok di etalase
+6. **Stok Read-Only** - Stok tidak bisa diubah langsung via modul produk, harus melalui:
+   - Modul Pasokan (tambah stok gudang)
+   - Modul Etalase (pindah gudang → etalase)
+   - Modul Penjualan (kurangi stok etalase)

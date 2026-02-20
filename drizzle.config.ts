@@ -5,8 +5,6 @@ export default defineConfig({
   out: "./drizzle",
   dialect: "sqlite",
   dbCredentials: {
-    // For local development with wrangler
-    // The actual D1 database is accessed through Cloudflare's binding
-    url: "./dev.db",
+    url: "file:cuan.db",
   },
 });

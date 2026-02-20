@@ -1,117 +1,345 @@
 import { Hono } from "hono";
-import type { Bindings, Variables } from "../../app";
-import { createAuth } from "@/auth";
-import { createDb } from "@/db";
-import { loginSchema, createUserSchema } from "@/lib/schemas";
-import { validate, apiResponse, errorResponse } from "@/lib/utils";
+import { z } from "zod";
+import { eq } from "drizzle-orm";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
+import { db } from "../../db";
+import { users, sessions, type UserRole } from "../../db/schema";
+import { config } from "../../config";
+
+const auth = new Hono();
+
+// ============================================================================
+// VALIDATION SCHEMAS
+// ============================================================================
+
+const registerSchema = z.object({
+  username: z.string().min(3).max(20).regex(/^[a-zA-Z0-9_]+$/, "Username harus alphanumeric"),
+  name: z.string().min(4).max(50).trim(),
+  password: z.string().min(6, "Password minimal 6 karakter"),
+  role: z.enum(["admin", "cashier", "guest"]).optional().default("guest"),
+});
+
+const loginSchema = z.object({
+  username: z.string(),
+  password: z.string(),
+});
+
+// ============================================================================
+// HELPERS
+// ============================================================================
+
+function generateJWT(userId: string, username: string, role: UserRole): string {
+  return jwt.sign(
+    {
+      userId,
+      username,
+      role,
+    },
+    config.jwt.secret,
+    { expiresIn: config.jwt.expiresIn }
+  );
+}
+
+function generateSessionId(): string {
+  return `sess_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+}
+
+// ============================================================================
+// ROUTES
+// ============================================================================
 
 /**
- * Authentication module
- * Handles user registration, login, logout, and session management
+ * POST /api/auth/register
+ * Register user baru
  */
-const auth = new Hono<{ Bindings: Bindings; Variables: Variables }>();
-
-/**
- * POST /api/auth/signup
- * Register a new user account
- */
-auth.post("/signup", validate(createUserSchema), async (c) => {
+auth.post("/register", async (c) => {
   try {
-    const db = createDb(c.env.DB);
-    const baseURL = c.req.header("origin") || `http://${c.req.header("host")}`;
-    const auth = createAuth(db, baseURL);
+    const body = await c.req.json();
+    const validation = registerSchema.safeParse(body);
 
-    const { email, password, name } = c.req.valid("json");
+    if (!validation.success) {
+      return c.json(
+        {
+          success: false,
+          error: "Validasi gagal",
+          details: validation.error.flatten(),
+        },
+        400
+      );
+    }
 
-    const result = await auth.api.signUpEmail({
-      body: {
-        email,
-        password,
-        name,
-      },
-      headers: c.req.raw.headers,
+    const { username, name, password, role } = validation.data;
+
+    // Cek username sudah ada
+    const existingUser = await db.query.users.findFirst({
+      where: eq(users.username, username),
     });
 
-    return c.json(apiResponse(result, "Account created successfully"), 201);
-  } catch (error) {
-    console.error("Signup error:", error);
+    if (existingUser) {
+      return c.json(
+        {
+          success: false,
+          error: "Username sudah digunakan",
+        },
+        409
+      );
+    }
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const userId = `user_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    const now = new Date().toISOString();
+
+    // Insert user
+    await db.insert(users).values({
+      id: userId,
+      username,
+      name,
+      password: hashedPassword,
+      role,
+      createdAt: now,
+      updatedAt: now,
+    });
+
     return c.json(
-      errorResponse("Failed to create account. Email may already be in use."),
-      400
+      {
+        success: true,
+        message: "User berhasil didaftarkan",
+        data: {
+          id: userId,
+          username,
+          name,
+          role,
+        },
+      },
+      201
+    );
+  } catch (error) {
+    console.error("Register error:", error);
+    return c.json(
+      {
+        success: false,
+        error: "Terjadi kesalahan server",
+      },
+      500
     );
   }
 });
 
 /**
- * POST /api/auth/signin
- * Sign in with email and password
+ * POST /api/auth/login
+ * Login dan generate JWT token
  */
-auth.post("/signin", validate(loginSchema), async (c) => {
+auth.post("/login", async (c) => {
   try {
-    const db = createDb(c.env.DB);
-    const baseURL = c.req.header("origin") || `http://${c.req.header("host")}`;
-    const auth = createAuth(db, baseURL);
+    const body = await c.req.json();
+    const validation = loginSchema.safeParse(body);
 
-    const { email, password } = c.req.valid("json");
-
-    const result = await auth.api.signInEmail({
-      body: {
-        email,
-        password,
-      },
-      headers: c.req.raw.headers,
-    });
-
-    return c.json(apiResponse(result, "Signed in successfully"));
-  } catch (error) {
-    console.error("Signin error:", error);
-    return c.json(errorResponse("Invalid email or password"), 401);
-  }
-});
-
-/**
- * POST /api/auth/signout
- * Sign out current session
- */
-auth.post("/signout", async (c) => {
-  try {
-    const db = createDb(c.env.DB);
-    const baseURL = c.req.header("origin") || `http://${c.req.header("host")}`;
-    const auth = createAuth(db, baseURL);
-
-    await auth.api.signOut({
-      headers: c.req.raw.headers,
-    });
-
-    return c.json(apiResponse(null, "Signed out successfully"));
-  } catch (error) {
-    console.error("Signout error:", error);
-    return c.json(errorResponse("Failed to sign out"), 500);
-  }
-});
-
-/**
- * GET /api/auth/session
- * Get current user session
- */
-auth.get("/session", async (c) => {
-  try {
-    const db = createDb(c.env.DB);
-    const baseURL = c.req.header("origin") || `http://${c.req.header("host")}`;
-    const auth = createAuth(db, baseURL);
-
-    const session = await auth.api.getSession({
-      headers: c.req.raw.headers,
-    });
-
-    if (!session) {
-      return c.json(errorResponse("Not authenticated", "Unauthorized"), 401);
+    if (!validation.success) {
+      return c.json(
+        {
+          success: false,
+          error: "Validasi gagal",
+          details: validation.error.flatten(),
+        },
+        400
+      );
     }
 
-    return c.json(apiResponse(session));
+    const { username, password } = validation.data;
+
+    // Find user by username
+    const user = await db.query.users.findFirst({
+      where: eq(users.username, username),
+    });
+
+    if (!user) {
+      return c.json(
+        {
+          success: false,
+          error: "Username atau password salah",
+        },
+        401
+      );
+    }
+
+    // Verify password
+    const isValidPassword = await bcrypt.compare(password, user.password);
+
+    if (!isValidPassword) {
+      return c.json(
+        {
+          success: false,
+          error: "Username atau password salah",
+        },
+        401
+      );
+    }
+
+    // Generate JWT
+    const token = generateJWT(user.id, user.username, user.role as UserRole);
+
+    // Decode token untuk dapat expiry
+    const decoded = jwt.decode(token) as { exp?: number };
+    const expiresAt = decoded?.exp
+      ? new Date(decoded.exp * 1000).toISOString()
+      : new Date(Date.now() + 15 * 60 * 1000).toISOString();
+
+    // Simpan session ke database
+    const sessionId = generateSessionId();
+    const now = new Date().toISOString();
+
+    await db.insert(sessions).values({
+      id: sessionId,
+      userId: user.id,
+      token,
+      expiresAt,
+      createdAt: now,
+      updatedAt: now,
+      ipAddress: c.req.header("X-Forwarded-For") || c.req.header("CF-Connecting-IP") || "",
+      userAgent: c.req.header("User-Agent") || "",
+    });
+
+    return c.json({
+      success: true,
+      message: "Login berhasil",
+      data: {
+        token,
+        expiresAt,
+        user: {
+          id: user.id,
+          username: user.username,
+          name: user.name,
+          role: user.role,
+        },
+      },
+    });
   } catch (error) {
-    console.error("Session error:", error);
-    return c.json(errorResponse("Failed to get session"), 500);
+    console.error("Login error:", error);
+    return c.json(
+      {
+        success: false,
+        error: "Terjadi kesalahan server",
+      },
+      500
+    );
+  }
+});
+
+/**
+ * POST /api/auth/logout
+ * Logout dan invalidate session
+ */
+auth.post("/logout", async (c) => {
+  try {
+    const authHeader = c.req.header("Authorization");
+
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return c.json(
+        {
+          success: false,
+          error: "Token tidak ditemukan",
+        },
+        401
+      );
+    }
+
+    const token = authHeader.substring(7);
+
+    // Delete session dari database
+    await db.delete(sessions).where(eq(sessions.token, token));
+
+    return c.json({
+      success: true,
+      message: "Logout berhasil",
+    });
+  } catch (error) {
+    console.error("Logout error:", error);
+    return c.json(
+      {
+        success: false,
+        error: "Terjadi kesalahan server",
+      },
+      500
+    );
+  }
+});
+
+/**
+ * GET /api/auth/me
+ * Get current user info
+ */
+auth.get("/me", async (c) => {
+  const authHeader = c.req.header("Authorization");
+
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return c.json(
+      {
+        success: false,
+        error: "Token tidak ditemukan",
+      },
+      401
+    );
+  }
+
+  const token = authHeader.substring(7);
+
+  try {
+    // Verify token
+    const decoded = jwt.verify(token, config.jwt.secret) as {
+      userId: string;
+      username: string;
+      role: UserRole;
+    };
+
+    // Get user from database
+    const user = await db.query.users.findFirst({
+      where: eq(users.id, decoded.userId),
+      columns: {
+        password: false, // Jangan return password
+      },
+    });
+
+    if (!user) {
+      return c.json(
+        {
+          success: false,
+          error: "User tidak ditemukan",
+        },
+        404
+      );
+    }
+
+    return c.json({
+      success: true,
+      data: {
+        id: user.id,
+        username: user.username,
+        name: user.name,
+        role: user.role,
+        createdAt: user.createdAt,
+      },
+    });
+  } catch (error) {
+    if (error instanceof jwt.TokenExpiredError) {
+      return c.json(
+        {
+          success: false,
+          error: "Token sudah expired",
+        },
+        401
+      );
+    }
+
+    return c.json(
+      {
+        success: false,
+        error: "Token tidak valid",
+      },
+      401
+    );
   }
 });
 

@@ -1,194 +1,346 @@
-# Authentication Module
-
-The authentication module handles user registration, login, logout, and session management using Better-Auth with a D1 database backend.
+# Modul Auth - Dokumentasi
 
 ## Database Schema
 
-### Users Table
-| Column | Type | Description |
-|--------|------|-------------|
-| id | text | Primary key (nanoid) |
-| name | text | User's full name |
-| email | text | Unique email address |
-| emailVerified | boolean | Email verification status |
-| image | text | Profile image URL |
-| createdAt | timestamp | Account creation date |
-| updatedAt | timestamp | Last update date |
+### Tabel `users`
 
-### Sessions Table
-| Column | Type | Description |
-|--------|------|-------------|
-| id | text | Primary key |
-| userId | text | Reference to user.id |
-| token | text | Unique session token |
-| expiresAt | timestamp | Session expiration |
-| createdAt | timestamp | Session creation |
-| updatedAt | timestamp | Last update |
-| ipAddress | text | Client IP address |
-| userAgent | text | Client user agent |
+| Kolom | Tipe | Constraint | Deskripsi |
+|-------|------|------------|-----------|
+| `id` | TEXT | PRIMARY KEY | ID unik user |
+| `username` | TEXT | UNIQUE NOT NULL | Username untuk login (3-20 char, alphanumeric) |
+| `name` | TEXT | NOT NULL | Full name (min 4 char) |
+| `password` | TEXT | NOT NULL | Hashed password (bcrypt) |
+| `role` | TEXT | DEFAULT 'guest' | Role: admin \| cashier \| guest |
+| `image` | TEXT | - | URL foto profil (optional) |
+| `createdAt` | TEXT | NOT NULL | Tanggal pembuatan |
+| `updatedAt` | TEXT | NOT NULL | Tanggal update terakhir |
 
-### Accounts Table
-| Column | Type | Description |
-|--------|------|-------------|
-| id | text | Primary key |
-| userId | text | Reference to user.id |
-| accountId | text | Provider account ID |
-| providerId | text | Provider name |
-| accessToken | text | OAuth access token |
-| refreshToken | text | OAuth refresh token |
-| accessTokenExpiresAt | timestamp | Token expiration |
-| scope | text | OAuth scope |
+### Tabel `sessions`
+
+| Kolom | Tipe | Constraint | Deskripsi |
+|-------|------|------------|-----------|
+| `id` | TEXT | PRIMARY KEY | ID unik session |
+| `userId` | TEXT | FK → users | Relasi ke user |
+| `token` | TEXT | UNIQUE NOT NULL | JWT token |
+| `expiresAt` | TEXT | NOT NULL | Tanggal expiry token |
+| `createdAt` | TEXT | NOT NULL | Tanggal pembuatan |
+| `updatedAt` | TEXT | NOT NULL | Tanggal update terakhir |
+| `ipAddress` | TEXT | - | IP address client |
+| `userAgent` | TEXT | - | User agent browser/app |
+
+### Tabel `accounts` (Optional - untuk OAuth)
+
+| Kolom | Tipe | Constraint | Deskripsi |
+|-------|------|------------|-----------|
+| `id` | TEXT | PRIMARY KEY | ID unik account |
+| `userId` | TEXT | FK → users | Relasi ke user |
+| `accountId` | TEXT | NOT NULL | Account ID dari provider |
+| `providerId` | TEXT | NOT NULL | Provider name (google, github, dll) |
+| `accessToken` | TEXT | - | OAuth access token |
+| `refreshToken` | TEXT | - | OAuth refresh token |
+| `createdAt` | TEXT | NOT NULL | Tanggal pembuatan |
+| `updatedAt` | TEXT | NOT NULL | Tanggal update terakhir |
+
+---
+
+## Roles & Permissions
+
+| Role | Deskripsi | Akses |
+|------|-----------|-------|
+| `admin` | Administrator penuh | Semua endpoint |
+| `cashier` | Kasir | POS, produk (read), etalase |
+| `guest` | Tamu | Read-only (produk, stok) |
+
+---
 
 ## API Endpoints
 
-### POST /api/auth/signup
+### 1. Register User Baru
 
-Register a new user account.
-
-**Request Body:**
-```json
-{
-  "email": "user@example.com",
-  "password": "securepassword123",
-  "name": "John Doe"
-}
-```
-
-**Response (201):**
-```json
-{
-  "success": true,
-  "message": "Account created successfully",
-  "data": {
-    "user": {
-      "id": "user_abc123",
-      "email": "user@example.com",
-      "name": "John Doe"
-    }
-  }
-}
-```
-
-### POST /api/auth/signin
-
-Sign in with email and password.
+**Endpoint:** `POST /api/auth/register`
 
 **Request Body:**
 ```json
 {
-  "email": "user@example.com",
-  "password": "securepassword123"
+  "username": "admin",
+  "name": "Administrator",
+  "password": "admin123",
+  "role": "admin"
 }
 ```
 
-**Response (200):**
+**Validasi:**
+- `username`: 3-20 karakter, alphanumeric (a-z, A-Z, 0-9, _)
+- `name`: minimal 4 karakter
+- `password`: minimal 6 karakter
+- `role`: optional, default "guest"
+
+**Response (201 Created):**
 ```json
 {
   "success": true,
-  "message": "Signed in successfully",
+  "message": "User berhasil didaftarkan",
   "data": {
-    "session": {
-      "token": "session_token_xyz",
-      "expiresAt": "2026-02-27T00:00:00.000Z"
-    }
+    "id": "user_1234567890_abc",
+    "username": "admin",
+    "name": "Administrator",
+    "role": "admin"
   }
 }
 ```
 
-### POST /api/auth/signout
-
-Sign out current session.
-
-**Headers:**
-```
-Authorization: Bearer <session_token>
-```
-
-**Response (200):**
+**Error Response (409 Conflict):**
 ```json
 {
-  "success": true,
-  "message": "Signed out successfully"
+  "success": false,
+  "error": "Username sudah digunakan"
 }
 ```
 
-### GET /api/auth/session
+---
 
-Get current user session information.
+### 2. Login
 
-**Headers:**
+**Endpoint:** `POST /api/auth/login`
+
+**Request Body:**
+```json
+{
+  "username": "admin",
+  "password": "admin123"
+}
 ```
-Authorization: Bearer <session_token>
-```
 
-**Response (200):**
+**Response (200 OK):**
 ```json
 {
   "success": true,
+  "message": "Login berhasil",
   "data": {
-    "session": {
-      "id": "session_abc123",
-      "userId": "user_xyz789",
-      "expiresAt": "2026-02-27T00:00:00.000Z"
-    },
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "expiresAt": "2026-02-19T12:15:00.000Z",
     "user": {
-      "id": "user_xyz789",
-      "email": "user@example.com",
-      "name": "John Doe"
+      "id": "user_1234567890_abc",
+      "username": "admin",
+      "name": "Administrator",
+      "role": "admin"
     }
   }
 }
 ```
+
+**JWT Token Payload:**
+```json
+{
+  "userId": "user_1234567890_abc",
+  "username": "admin",
+  "role": "admin",
+  "iat": 1234567890,
+  "exp": 1234568790
+}
+```
+
+**Token Expiry:** 15 menit
+
+---
+
+### 3. Logout
+
+**Endpoint:** `POST /api/auth/logout`
+
+**Headers:**
+```
+Authorization: Bearer <jwt_token>
+```
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "message": "Logout berhasil"
+}
+```
+
+---
+
+### 4. Get Current User
+
+**Endpoint:** `GET /api/auth/me`
+
+**Headers:**
+```
+Authorization: Bearer <jwt_token>
+```
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "user_1234567890_abc",
+    "username": "admin",
+    "name": "Administrator",
+    "role": "admin",
+    "createdAt": "2026-02-19T10:00:00.000Z"
+  }
+}
+```
+
+---
 
 ## Authentication Flow
 
+### Register → Login → Access Protected → Logout
+
 ```
-┌─────────┐      ┌─────────┐      ┌─────────┐
-│  Client │      │  API    │      │  D1 DB  │
-└────┬────┘      └────┬────┘      └────┬────┘
-     │                │                │
-     │  POST /signup  │                │
-     │───────────────>│                │
-     │                │  Create user   │
-     │                │───────────────>│
-     │                │                │
-     │  POST /signin  │                │
-     │───────────────>│                │
-     │                │  Verify creds  │
-     │                │───────────────>│
-     │                │                │
-     │  Session token │                │
-     │<───────────────│                │
-     │                │                │
-     │  GET /todos    │                │
-     │  (with token)  │                │
-     │───────────────>│                │
-     │                │  Validate      │
-     │                │───────────────>│
-     │                │                │
-     │  Todos data    │                │
-     │<───────────────│                │
-     │                │                │
+┌─────────────────────────────────────────────────────────────┐
+│  1. REGISTER                                                │
+│  POST /api/auth/register                                    │
+│  Body: { username, name, password, role }                   │
+│  → User dibuat di database (password di-hash dengan bcrypt) │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│  2. LOGIN                                                   │
+│  POST /api/auth/login                                       │
+│  Body: { username, password }                               │
+│  → Verify password                                          │
+│  → Generate JWT token (exp: 15 menit)                       │
+│  → Save session ke database                                 │
+│  ← Return token + user info                                 │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│  3. ACCESS PROTECTED ENDPOINT                               │
+│  GET /api/produk                                            │
+│  Header: Authorization: Bearer <token>                      │
+│  → Verify JWT (signature, expiry)                           │
+│  → Extract user role dari token                             │
+│  → Check role-based access                                  │
+│  ← Return data (jika authorized)                            │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│  4. LOGOUT                                                  │
+│  POST /api/auth/logout                                      │
+│  Header: Authorization: Bearer <token>                      │
+│  → Delete session dari database                             │
+│  ← Token tidak bisa dipakai lagi                            │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-## Security Best Practices
+---
 
-1. **Password Requirements**: Minimum 8 characters, mix of letters and numbers
-2. **Session Expiration**: Sessions expire after 7 days
-3. **Secure Cookies**: Use secure cookies in production (HTTPS)
-4. **Rate Limiting**: Implement rate limiting on auth endpoints
-5. **CORS**: Configure allowed origins per environment
+## Middleware Usage
+
+### Auth Middleware (Verify JWT)
+
+```typescript
+import { Hono } from "hono";
+import { authMiddleware } from "../middlewares/auth";
+
+const app = new Hono();
+
+// Endpoint yang butuh authentication
+app.get("/api/produk", authMiddleware, async (c) => {
+  const user = c.get("user");
+  // user = { userId, username, role, iat, exp }
+  
+  return c.json({ user });
+});
+```
+
+### Role-Based Middleware
+
+```typescript
+import { requireRole } from "../middlewares/auth";
+
+// Hanya admin yang bisa akses
+app.post("/api/produk", 
+  authMiddleware, 
+  requireRole("admin"), 
+  async (c) => {
+    // Only admin can reach here
+  }
+);
+
+// Admin atau cashier yang bisa akses
+app.post("/api/penjualan",
+  authMiddleware,
+  requireRole("admin", "cashier"),
+  async (c) => {
+    // Admin atau cashier can reach here
+  }
+);
+```
+
+---
+
+## Default Users (Seed Data)
+
+Untuk development, buat users berikut:
+
+```typescript
+// Admin
+{
+  username: "admin",
+  name: "Administrator",
+  password: "admin123",
+  role: "admin"
+}
+
+// Cashier
+{
+  username: "kasir1",
+  name: "Kasir Utama",
+  password: "kasir123",
+  role: "cashier"
+}
+```
+
+---
 
 ## Environment Variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| ENVIRONMENT | Environment name | development |
-| CORS_ORIGINS | Allowed origins | localhost:3000 |
+```bash
+# JWT Secret (WAJIB diubah di production!)
+JWT_SECRET=your-super-secret-key-change-this-in-production
+
+# Server
+PORT=3000
+```
+
+---
+
+## Security Best Practices
+
+1. **Password Hashing** - Menggunakan bcrypt dengan salt rounds = 10
+2. **JWT Expiry** - Token expired dalam 15 menit
+3. **Session Storage** - Session disimpan di database untuk invalidation
+4. **Username Validation** - Alphanumeric only, mencegah injection
+5. **Error Messages** - Generic error untuk login (tidak reveal username exists)
+
+---
 
 ## Testing
 
+Jalankan unit tests:
+
 ```bash
-# Run auth tests
 bun test tests/auth.test.ts
 ```
+
+Test coverage:
+- ✅ Register user baru
+- ✅ Validasi input (username, name, password)
+- ✅ Duplicate username handling
+- ✅ Login dengan credentials benar
+- ✅ Login dengan credentials salah
+- ✅ JWT token generation
+- ✅ Session storage
+- ✅ Protected endpoint access
+- ✅ Logout & session invalidation
+- ✅ Role-based access control

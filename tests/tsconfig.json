@@ -1,9 +1,0 @@
-{
-  "extends": "../tsconfig.json",
-  "compilerOptions": {
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "types": ["bun-types"]
-  },
-  "include": ["**/*.test.ts", "utils.ts"]
-}

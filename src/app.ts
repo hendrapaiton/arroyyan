@@ -2,15 +2,15 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { secureHeaders } from "hono/secure-headers";
-import type { Auth } from "@/auth";
-import type { Database } from "@/db";
-import { getConfig } from "./config";
+import { HTTPException } from "hono/http-exception";
 
 // Import modules
-import { health } from "./modules/health";
 import { auth } from "./modules/auth";
-import { customers } from "./modules/customers";
-import { products } from "./modules/products";
+import { produk } from "./modules/produk";
+import { pasokan } from "./modules/pasokan";
+import { etalase } from "./modules/etalase";
+import { penjualan } from "./modules/penjualan";
+import { dashboard } from "./modules/dashboard";
 
 export type Bindings = {
   DB: D1Database;
@@ -18,8 +18,6 @@ export type Bindings = {
 };
 
 export type Variables = {
-  auth: Auth;
-  db: Database;
   userId?: string;
 };
 
@@ -27,7 +25,6 @@ export type Variables = {
  * Create the main Hono application with all middleware and routes
  */
 export function createApp() {
-  const config = getConfig();
   const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
   // Global middleware
@@ -36,7 +33,7 @@ export function createApp() {
   app.use(
     "*",
     cors({
-      origin: config.corsOrigins,
+      origin: ["http://localhost:3000", "http://localhost:8787", "https://karnarupa.com", "https://www.karnarupa.com"],
       allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
       allowHeaders: ["Content-Type", "Authorization"],
       exposeHeaders: ["Content-Length"],
@@ -48,23 +45,34 @@ export function createApp() {
   // Root endpoint - API information
   app.get("/", (c) => {
     return c.json({
-      name: "Arroyyan - Petshop Management System",
+      name: "Arroyyan - Ternak Management System",
+      version: "1.0.0",
       url: "www.karnarupa.com",
+      description: "Sistem manajemen ternak dan peternakan",
     });
   });
 
   // Health check endpoint
-  app.route("/health", health);
+  app.get("/health", (c) => {
+    return c.json({
+      status: "healthy",
+      timestamp: new Date().toISOString(),
+    });
+  });
 
   // API routes
   app.route("/api/auth", auth);
-  app.route("/api/customers", customers);
-  app.route("/api/products", products);
+  app.route("/api/produk", produk);
+  app.route("/api/pasokan", pasokan);
+  app.route("/api/etalase", etalase);
+  app.route("/api/penjualan", penjualan);
+  app.route("/api/dashboard", dashboard);
 
   // 404 handler
   app.notFound((c) => {
     return c.json(
       {
+        success: false,
         error: "Not Found",
         message: `Route ${c.req.path} not found`,
       },
@@ -72,11 +80,24 @@ export function createApp() {
     );
   });
 
-  // Error handler
+  // Error handler - handles all errors including HTTPException from middleware
   app.onError((err, c) => {
     console.error("Error:", err);
+    
+    // Handle HTTPException from Hono middleware (auth, etc.)
+    if (err instanceof HTTPException) {
+      return c.json(
+        {
+          success: false,
+          error: err.message,
+        },
+        err.status
+      );
+    }
+    
     return c.json(
       {
+        success: false,
         error: "Internal Server Error",
         message: err.message || "An unexpected error occurred",
       },

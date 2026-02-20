@@ -1,7 +1,5 @@
-import { createApp, type Bindings, type Variables } from "./app";
-import { createAuth } from "./auth";
-import { createDb } from "./db";
-import { validateConfig } from "./config";
+import { createApp, type Bindings, type Variables } from "./src/app";
+import { validateConfig } from "./src/config";
 
 // Export types for Cloudflare Workers
 export type { Bindings, Variables };
@@ -20,4 +18,4 @@ export default {
 } satisfies ExportedHandler<Bindings>;
 
 // Export for other uses
-export { createApp, createAuth, createDb };
+export { createApp };
