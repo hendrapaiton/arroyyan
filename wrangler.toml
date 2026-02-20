@@ -1,0 +1,24 @@
+#:schema node_modules/wrangler/config-schema.json
+name = "arroyyan"
+main = "src/index.ts"
+compatibility_date = "2025-02-20"
+compatibility_flags = ["nodejs_compat"]
+
+# Environment variables
+[vars]
+ENVIRONMENT = "development"
+
+# D1 Database
+[[d1_databases]]
+binding = "DB"
+database_name = "arroyyan-db"
+database_id = "bf9bfb82-e3c6-47b3-b8c4-d6d3effc4510"
+
+# D1 Database for production
+[env.production]
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "arroyyan-db"
+database_id = "<YOUR_PRODUCTION_DATABASE_ID>"
+[env.production.vars]
+ENVIRONMENT = "production"

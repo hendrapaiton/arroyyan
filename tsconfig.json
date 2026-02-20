@@ -1,0 +1,39 @@
+{
+  "compilerOptions": {
+    /* Visit https://aka.ms/tsconfig to read more about this file */
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022"],
+    "types": ["@cloudflare/workers-types/2023-07-01"],
+    "jsx": "react-jsx",
+    "jsxImportSource": "hono/jsx",
+
+    /* Strictness */
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+
+    /* Emit */
+    "noEmit": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true,
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+
+    /* Path aliases */
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"],
+      "@/routes/*": ["src/routes/*"],
+      "@/db/*": ["src/db/*"],
+      "@/auth/*": ["src/auth/*"],
+      "@/lib/*": ["src/lib/*"],
+      "@/types/*": ["src/types/*"]
+    }
+  },
+  "include": ["src/**/*", "drizzle.config.ts"],
+  "exclude": ["node_modules", "dist"]
+}
