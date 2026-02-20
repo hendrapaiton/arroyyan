@@ -3,7 +3,7 @@
  * Business logic untuk transaksi penjualan kasir
  */
 
-import { db } from "../../db";
+import { createDb, type Bindings } from "../../db";
 import {
   sales,
   saleItems,
@@ -204,6 +204,7 @@ export async function validateSaleItems(
  * - Calculates totals automatically
  */
 export async function createSale(
+  db: ReturnType<typeof createDb>,
   input: CreateSaleInput
 ): Promise<SaleWithDetails> {
   const {
@@ -325,7 +326,10 @@ export async function createSale(
 /**
  * Get sale by ID with full details
  */
-export async function getSaleById(id: string): Promise<SaleWithDetails> {
+export async function getSaleById(
+  db: ReturnType<typeof createDb>,
+  id: string
+): Promise<SaleWithDetails> {
   const sale = await db.query.sales.findFirst({
     where: eq(sales.id, id),
     with: {
@@ -382,6 +386,7 @@ export interface GetSalesResult {
 }
 
 export async function getSales(
+  db: ReturnType<typeof createDb>,
   filters: GetSalesFilters = {}
 ): Promise<GetSalesResult> {
   const {
@@ -460,6 +465,7 @@ export async function getSales(
  * Get sale items by sale ID
  */
 export async function getSaleItems(
+  db: ReturnType<typeof createDb>,
   saleId: string
 ): Promise<(SaleItem & { product: { id: string; name: string; sku: string } })[]> {
   // Check sale exists
@@ -494,6 +500,7 @@ export async function getSaleItems(
  * Get sales statistics
  */
 export async function getSalesStats(
+  db: ReturnType<typeof createDb>,
   startDate?: string,
   endDate?: string
 ): Promise<SalesStats> {
@@ -570,7 +577,9 @@ export async function getSalesStats(
 /**
  * Get today's sales summary
  */
-export async function getTodaySummary(): Promise<TodaySummary> {
+export async function getTodaySummary(
+  db: ReturnType<typeof createDb>
+): Promise<TodaySummary> {
   const today = toDateOnly(new Date());
 
   // Get today's sales
@@ -619,6 +628,7 @@ export async function getTodaySummary(): Promise<TodaySummary> {
  * Get sales by cashier
  */
 export async function getSalesByCashier(
+  db: ReturnType<typeof createDb>,
   cashierId: string,
   startDate?: string,
   endDate?: string

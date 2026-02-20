@@ -18,8 +18,10 @@ import {
 } from "./service";
 import { createTransferSchema, transferQuerySchema, restockQuerySchema } from "./schema";
 import { authMiddleware, requireRole } from "../../middlewares/auth";
+import { createDb, type Bindings, type Variables } from "../../db";
+import { handleErrorJson } from "../../lib/errors";
 
-const etalase = new Hono();
+const etalase = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 // ============================================================================
 // ERROR HANDLING HELPER
@@ -123,7 +125,7 @@ etalase.post("/", authMiddleware, requireRole("admin", "cashier"), async (c) => 
     // Get user from context (set by authMiddleware)
     const user = c.get("user");
 
-    const transfer = await createTransfer({
+    const transfer = await createTransfer(createDb(c.env.DB), {
       ...validation.data,
       performedBy: user?.userId,
     });
@@ -168,7 +170,7 @@ etalase.get("/", authMiddleware, async (c) => {
 
     const { startDate, endDate, performedBy, page, limit } = queryValidation.data;
 
-    const result = await getTransfers({
+    const result = await getTransfers(createDb(c.env.DB), {
       startDate,
       endDate,
       performedBy,
@@ -199,7 +201,7 @@ etalase.get("/", authMiddleware, async (c) => {
  */
 etalase.get("/stats", authMiddleware, async (c) => {
   try {
-    const stats = await getStockStats();
+    const stats = await getStockStats(createDb(c.env.DB));
 
     return c.json({
       success: true,
@@ -240,7 +242,7 @@ etalase.get("/restock-suggestions", authMiddleware, async (c) => {
 
     const { minWarehouseStock } = queryValidation.data;
 
-    const suggestions = await getRestockSuggestions(minWarehouseStock);
+    const suggestions = await getRestockSuggestions(createDb(c.env.DB), minWarehouseStock);
 
     return c.json({
       success: true,
@@ -270,7 +272,7 @@ etalase.get("/:id", authMiddleware, async (c) => {
   try {
     const id = c.req.param("id");
 
-    const transfer = await getTransferById(id);
+    const transfer = await getTransferById(createDb(c.env.DB), id);
 
     return c.json({
       success: true,
@@ -311,7 +313,7 @@ etalase.get("/:id/items", authMiddleware, async (c) => {
   try {
     const id = c.req.param("id");
 
-    const items = await getTransferItems(id);
+    const items = await getTransferItems(createDb(c.env.DB), id);
 
     return c.json({
       success: true,

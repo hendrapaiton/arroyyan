@@ -10,6 +10,7 @@ workers_dev = true
 # Environment variables
 [vars]
 ENVIRONMENT = "development"
+JWT_SECRET = "change-this-to-a-secure-random-string-of-at-least-32-characters"
 
 # D1 Database
 [[d1_databases]]

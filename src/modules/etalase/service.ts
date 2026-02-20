@@ -289,6 +289,7 @@ export interface GetTransfersResult {
 }
 
 export async function getTransfers(
+  db: ReturnType<typeof createDb>,
   filters: GetTransfersFilters = {}
 ): Promise<GetTransfersResult> {
   const {
@@ -362,6 +363,7 @@ export async function getTransfers(
  * Get transfer items by transfer ID
  */
 export async function getTransferItems(
+  db: ReturnType<typeof createDb>,
   transferId: string
 ): Promise<(StockTransferItem & { product: { id: string; name: string; sku: string } })[]> {
   // Check transfer exists
@@ -395,7 +397,9 @@ export async function getTransferItems(
 /**
  * Get stock statistics (gudang vs etalase)
  */
-export async function getStockStats(): Promise<TransferStats> {
+export async function getStockStats(
+  db: ReturnType<typeof createDb>
+): Promise<TransferStats> {
   const allInventory = await db.query.inventory.findMany({
     with: {
       product: {
@@ -449,6 +453,7 @@ export interface RestockSuggestion {
 }
 
 export async function getRestockSuggestions(
+  db: ReturnType<typeof createDb>,
   minWarehouseStock: number = 10
 ): Promise<RestockSuggestion[]> {
   const allInventory = await db.query.inventory.findMany({

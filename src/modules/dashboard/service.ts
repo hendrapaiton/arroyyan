@@ -83,10 +83,10 @@ export async function getDashboardData(
   const totalRevenue = await getTotalRevenue(db, dateRange.startDate, dateRange.endDate);
 
   // Get low stock count
-  const lowStockCount = await getLowStockCount();
+  const lowStockCount = await getLowStockCount(db, 10);
 
   // Get transactions within the period
-  const transactions = await getTransactions(dateRange.startDate, dateRange.endDate, 20);
+  const transactions = await getTransactions(db, dateRange.startDate, dateRange.endDate, 20);
 
   return {
     period,
@@ -122,7 +122,10 @@ export async function getTotalRevenue(
 /**
  * Get count of products with low stock (threshold: 10)
  */
-export async function getLowStockCount(threshold: number = 10): Promise<number> {
+export async function getLowStockCount(
+  db: ReturnType<typeof createDb>,
+  threshold: number = 10
+): Promise<number> {
   const allInventory = await db.query.inventory.findMany({
     with: {
       product: {
@@ -152,6 +155,7 @@ export async function getLowStockCount(threshold: number = 10): Promise<number> 
  * Get transactions within a date range
  */
 export async function getTransactions(
+  db: ReturnType<typeof createDb>,
   startDate: string,
   endDate: string,
   limit: number = 20
@@ -200,7 +204,9 @@ export interface QuickSummary {
   lowStockCount: number;
 }
 
-export async function getQuickSummary(): Promise<QuickSummary> {
+export async function getQuickSummary(
+  db: ReturnType<typeof createDb>
+): Promise<QuickSummary> {
   const today = new Date().toISOString().split("T")[0]!;
 
   const todaySales = await db.query.sales.findMany({
@@ -231,6 +237,7 @@ export interface TrendData {
 }
 
 export async function getSalesTrend(
+  db: ReturnType<typeof createDb>,
   startDate: string,
   endDate: string
 ): Promise<TrendData[]> {
@@ -272,6 +279,7 @@ export interface TopProduct {
 }
 
 export async function getTopProducts(
+  db: ReturnType<typeof createDb>,
   limit: number = 10,
   startDate?: string,
   endDate?: string
@@ -343,6 +351,7 @@ export interface CustomStats {
 }
 
 export async function getCustomStats(
+  db: ReturnType<typeof createDb>,
   startDate: string,
   endDate: string
 ): Promise<CustomStats> {

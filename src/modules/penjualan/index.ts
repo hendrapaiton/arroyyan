@@ -20,9 +20,10 @@ import {
 } from "./service";
 import { createSaleSchema, salesQuerySchema, cashierQuerySchema } from "./schema";
 import { authMiddleware, requireRole } from "../../middlewares/auth";
+import { createDb, type Bindings, type Variables } from "../../db";
 import { handleErrorJson } from "../../lib/errors";
 
-const penjualan = new Hono();
+const penjualan = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 // ============================================================================
 // ERROR HANDLING HELPER
@@ -139,7 +140,7 @@ penjualan.post("/", authMiddleware, requireRole("admin", "cashier"), async (c) =
     // Get user from context (set by authMiddleware)
     const user = c.get("user");
 
-    const sale = await createSale({
+    const sale = await createSale(createDb(c.env.DB), {
       ...validation.data,
       cashierId: user?.userId,
     });
@@ -185,7 +186,7 @@ penjualan.get("/", authMiddleware, async (c) => {
     const { startDate, endDate, cashierId, paymentMethod, page, limit } =
       queryValidation.data;
 
-    const result = await getSales({
+    const result = await getSales(createDb(c.env.DB), {
       startDate,
       endDate,
       cashierId,
@@ -213,7 +214,7 @@ penjualan.get("/stats", authMiddleware, requireRole("admin"), async (c) => {
   try {
     const { startDate, endDate } = c.req.query();
 
-    const stats = await getSalesStats(startDate, endDate);
+    const stats = await getSalesStats(createDb(c.env.DB), startDate, endDate);
 
     return c.json({
       success: true,
@@ -232,7 +233,7 @@ penjualan.get("/stats", authMiddleware, requireRole("admin"), async (c) => {
  */
 penjualan.get("/today", authMiddleware, async (c) => {
   try {
-    const summary = await getTodaySummary();
+    const summary = await getTodaySummary(createDb(c.env.DB));
 
     return c.json({
       success: true,
@@ -258,7 +259,7 @@ penjualan.get(
       const cashierId = c.req.param("id");
       const { startDate, endDate } = c.req.query();
 
-      const result = await getSalesByCashier(cashierId, startDate, endDate);
+      const result = await getSalesByCashier(createDb(c.env.DB), cashierId, startDate, endDate);
 
       return c.json({
         success: true,
@@ -280,7 +281,7 @@ penjualan.get("/:id", authMiddleware, async (c) => {
   try {
     const id = c.req.param("id");
 
-    const sale = await getSaleById(id);
+    const sale = await getSaleById(createDb(c.env.DB), id);
 
     return c.json({
       success: true,
@@ -301,7 +302,7 @@ penjualan.get("/:id/items", authMiddleware, async (c) => {
   try {
     const id = c.req.param("id");
 
-    const items = await getSaleItems(id);
+    const items = await getSaleItems(createDb(c.env.DB), id);
 
     return c.json({
       success: true,

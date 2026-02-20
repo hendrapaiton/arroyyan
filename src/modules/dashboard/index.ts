@@ -8,8 +8,9 @@ import { HTTPException } from "hono/http-exception";
 import { getDashboardData, getQuickSummary, getSalesTrend, getTopProducts, getCustomStats } from "./service";
 import { dashboardQuerySchema } from "./schema";
 import { authMiddleware, requireRole } from "../../middlewares/auth";
+import { createDb, type Bindings, type Variables } from "../../db";
 
-const dashboard = new Hono();
+const dashboard = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 // ============================================================================
 // ROUTES
@@ -53,7 +54,7 @@ dashboard.get("/", authMiddleware, async (c) => {
     const { period } = queryValidation.data;
 
     // Get dashboard data
-    const data = await getDashboardData(period);
+    const data = await getDashboardData(createDb(c.env.DB), period);
 
     return c.json({
       success: true,
@@ -84,7 +85,7 @@ export { dashboard };
  */
 dashboard.get("/quick", authMiddleware, async (c) => {
   try {
-    const summary = await getQuickSummary();
+    const summary = await getQuickSummary(createDb(c.env.DB));
 
     return c.json({
       success: true,
@@ -121,7 +122,7 @@ dashboard.get("/trend", authMiddleware, async (c) => {
       );
     }
 
-    const trend = await getSalesTrend(startDate, endDate);
+    const trend = await getSalesTrend(createDb(c.env.DB), startDate, endDate);
 
     return c.json({
       success: true,
@@ -148,11 +149,7 @@ dashboard.get("/top-products", authMiddleware, async (c) => {
   try {
     const { limit, startDate, endDate } = c.req.query();
 
-    const products = await getTopProducts(
-      parseInt(limit || "10"),
-      startDate,
-      endDate
-    );
+    const products = await getTopProducts(createDb(c.env.DB), parseInt(limit || "10"), startDate, endDate);
 
     return c.json({
       success: true,
@@ -189,7 +186,7 @@ dashboard.get("/stats", authMiddleware, requireRole("admin"), async (c) => {
       );
     }
 
-    const stats = await getCustomStats(startDate, endDate);
+    const stats = await getCustomStats(createDb(c.env.DB), startDate, endDate);
 
     return c.json({
       success: true,
