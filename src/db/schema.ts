@@ -34,6 +34,22 @@ export const sessions = sqliteTable("sessions", {
   expiresAtIdx: index("sessions_expires_at_idx").on(table.expiresAt),
 }));
 
+export const refreshTokens = sqliteTable("refresh_tokens", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  token: text("token").notNull().unique(), // Refresh token hash
+  expiresAt: text("expires_at").notNull(),
+  createdAt: text("created_at").notNull(),
+  revokedAt: text("revoked_at"), // For manual revocation
+  replacedByToken: text("replaced_by_token"), // Token rotation tracking
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+}, (table) => ({
+  userIdIdx: index("refresh_tokens_user_id_idx").on(table.userId),
+  tokenIdx: index("refresh_tokens_token_idx").on(table.token),
+  expiresAtIdx: index("refresh_tokens_expires_at_idx").on(table.expiresAt),
+}));
+
 export const accounts = sqliteTable("accounts", {
   id: text("id").primaryKey(),
   userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
@@ -179,11 +195,19 @@ export const saleItems = sqliteTable("sale_items", {
 export const usersRelations = relations(users, ({ many }) => ({
   sessions: many(sessions),
   accounts: many(accounts),
+  refreshTokens: many(refreshTokens),
 }));
 
 export const sessionsRelations = relations(sessions, ({ one }) => ({
   user: one(users, {
     fields: [sessions.userId],
+    references: [users.id],
+  }),
+}));
+
+export const refreshTokensRelations = relations(refreshTokens, ({ one }) => ({
+  user: one(users, {
+    fields: [refreshTokens.userId],
     references: [users.id],
   }),
 }));
@@ -278,6 +302,8 @@ export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type Session = typeof sessions.$inferSelect;
 export type NewSession = typeof sessions.$inferInsert;
+export type RefreshToken = typeof refreshTokens.$inferSelect;
+export type NewRefreshToken = typeof refreshTokens.$inferInsert;
 export type Account = typeof accounts.$inferSelect;
 export type NewAccount = typeof accounts.$inferInsert;
 

@@ -33,7 +33,8 @@ export const config = {
   // JWT configuration
   jwt: {
     secret: getOptionalEnv("JWT_SECRET", "default-dev-secret-change-in-production-min-32-chars"),
-    expiresIn: "15m", // Token expiry: 15 minutes
+    expiresIn: "15m", // Access token expiry: 15 minutes
+    refreshExpiresIn: "7d", // Refresh token expiry: 7 days
   },
 
   // Database configuration

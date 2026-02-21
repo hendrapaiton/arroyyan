@@ -1,11 +1,19 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { createDb, type Bindings, type Variables } from "../../db";
-import { users, sessions, type UserRole } from "../../db/schema";
+import { users, sessions, refreshTokens, type UserRole } from "../../db/schema";
 import { config } from "../../config";
+import {
+  generateAccessToken,
+  generateRefreshToken,
+  hashRefreshToken,
+  verifyRefreshToken,
+  decodeRefreshToken,
+  getTokenExpiryDate,
+} from "../../lib/refresh-token";
 
 const auth = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
@@ -29,20 +37,22 @@ const loginSchema = z.object({
 // HELPERS
 // ============================================================================
 
-function generateJWT(userId: string, username: string, role: UserRole): string {
-  return jwt.sign(
-    {
-      userId,
-      username,
-      role,
-    },
-    config.jwt.secret,
-    { expiresIn: config.jwt.expiresIn }
-  );
-}
-
 function generateSessionId(): string {
   return `sess_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+}
+
+/**
+ * Set refresh token as httpOnly cookie
+ */
+function setRefreshTokenCookie(c: any, token: string, expiresAt: Date) {
+  c.header("Set-Cookie", `refreshToken=${token}; HttpOnly; Secure; SameSite=Strict; Path=/; Expires=${expiresAt.toUTCString()}`);
+}
+
+/**
+ * Clear refresh token cookie
+ */
+function clearRefreshTokenCookie(c: any) {
+  c.header("Set-Cookie", "refreshToken=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0");
 }
 
 // ============================================================================
@@ -130,7 +140,7 @@ auth.post("/register", async (c) => {
 
 /**
  * POST /api/auth/login
- * Login dan generate JWT token
+ * Login dan generate JWT token + refresh token (httpOnly cookie)
  */
 auth.post("/login", async (c) => {
   try {
@@ -178,14 +188,24 @@ auth.post("/login", async (c) => {
       );
     }
 
-    // Generate JWT
-    const token = generateJWT(user.id, user.username, user.role as UserRole);
+    // Generate tokens
+    const accessToken = generateAccessToken(user.id, user.username, user.role as UserRole);
+    const refreshToken = generateRefreshToken(user.id);
 
-    // Decode token untuk dapat expiry
-    const decoded = jwt.decode(token) as { exp?: number };
-    const expiresAt = decoded?.exp
-      ? new Date(decoded.exp * 1000).toISOString()
+    // Decode tokens untuk dapat expiry
+    const accessDecoded = jwt.decode(accessToken) as { exp?: number };
+    const refreshDecoded = jwt.decode(refreshToken) as { exp?: number };
+    
+    const accessExpiresAt = accessDecoded?.exp
+      ? new Date(accessDecoded.exp * 1000).toISOString()
       : new Date(Date.now() + 15 * 60 * 1000).toISOString();
+    
+    const refreshExpiresAt = refreshDecoded?.exp
+      ? new Date(refreshDecoded.exp * 1000).toISOString()
+      : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+
+    // Hash refresh token untuk storage
+    const hashedRefreshToken = await hashRefreshToken(refreshToken);
 
     // Simpan session ke database
     const sessionId = generateSessionId();
@@ -194,20 +214,37 @@ auth.post("/login", async (c) => {
     await createDb(c.env.DB).insert(sessions).values({
       id: sessionId,
       userId: user.id,
-      token,
-      expiresAt,
+      token: accessToken,
+      expiresAt: accessExpiresAt,
       createdAt: now,
       updatedAt: now,
       ipAddress: c.req.header("X-Forwarded-For") || c.req.header("CF-Connecting-IP") || "",
       userAgent: c.req.header("User-Agent") || "",
     });
 
+    // Simpan refresh token ke database
+    const refreshTokenId = `refresh_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    
+    await createDb(c.env.DB).insert(refreshTokens).values({
+      id: refreshTokenId,
+      userId: user.id,
+      token: hashedRefreshToken,
+      expiresAt: refreshExpiresAt,
+      createdAt: now,
+      ipAddress: c.req.header("X-Forwarded-For") || c.req.header("CF-Connecting-IP") || "",
+      userAgent: c.req.header("User-Agent") || "",
+    });
+
+    // Set refresh token sebagai httpOnly cookie
+    const refreshExpiryDate = new Date(refreshExpiresAt);
+    setRefreshTokenCookie(c, refreshToken, refreshExpiryDate);
+
     return c.json({
       success: true,
       message: "Login berhasil",
       data: {
-        token,
-        expiresAt,
+        token: accessToken,
+        expiresAt: accessExpiresAt,
         user: {
           id: user.id,
           username: user.username,
@@ -230,26 +267,31 @@ auth.post("/login", async (c) => {
 
 /**
  * POST /api/auth/logout
- * Logout dan invalidate session
+ * Logout dan invalidate session + refresh token
  */
 auth.post("/logout", async (c) => {
   try {
     const authHeader = c.req.header("Authorization");
 
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return c.json(
-        {
-          success: false,
-          error: "Token tidak ditemukan",
-        },
-        401
-      );
+    // Clear refresh token cookie
+    clearRefreshTokenCookie(c);
+
+    // Delete access token session dari database
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      const token = authHeader.substring(7);
+      await createDb(c.env.DB).delete(sessions).where(eq(sessions.token, token));
     }
 
-    const token = authHeader.substring(7);
-
-    // Delete session dari database
-    await createDb(c.env.DB).delete(sessions).where(eq(sessions.token, token));
+    // Delete all refresh tokens untuk user ini
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      const token = authHeader.substring(7);
+      try {
+        const decoded = jwt.verify(token, config.jwt.secret) as { userId: string };
+        await createDb(c.env.DB).delete(refreshTokens).where(eq(refreshTokens.userId, decoded.userId));
+      } catch (error) {
+        // Token tidak valid, skip delete by userId
+      }
+    }
 
     return c.json({
       success: true,
@@ -339,6 +381,165 @@ auth.get("/me", async (c) => {
         error: "Token tidak valid",
       },
       401
+    );
+  }
+});
+
+/**
+ * POST /api/auth/refresh
+ * Refresh access token menggunakan refresh token dari httpOnly cookie
+ */
+auth.post("/refresh", async (c) => {
+  try {
+    // Get refresh token dari cookie
+    const refreshToken = c.req.header("Cookie")
+      ?.split(";")
+      .find((cookie) => cookie.trim().startsWith("refreshToken="))
+      ?.split("=")[1];
+
+    if (!refreshToken) {
+      return c.json(
+        {
+          success: false,
+          error: "Refresh token tidak ditemukan",
+        },
+        401
+      );
+    }
+
+    // Verify refresh token
+    let decoded: { userId: string; type: "refresh"; exp: number };
+    try {
+      decoded = verifyRefreshToken(refreshToken);
+    } catch (error) {
+      if (error instanceof jwt.TokenExpiredError) {
+        // Clear expired token cookie
+        clearRefreshTokenCookie(c);
+        return c.json(
+          {
+            success: false,
+            error: "Refresh token sudah expired",
+          },
+          401
+        );
+      }
+      return c.json(
+        {
+          success: false,
+          error: "Refresh token tidak valid",
+        },
+        401
+      );
+    }
+
+    // Check apakah refresh token ada di database
+    const hashedToken = await bcrypt.hash(refreshToken, 10);
+    const dbRefreshToken = await createDb(c.env.DB).query.refreshTokens.findFirst({
+      where: eq(refreshTokens.userId, decoded.userId),
+    });
+
+    if (!dbRefreshToken) {
+      clearRefreshTokenCookie(c);
+      return c.json(
+        {
+          success: false,
+          error: "Refresh token tidak ditemukan",
+        },
+        401
+      );
+    }
+
+    // Verify hash
+    const isValidToken = await bcrypt.compare(refreshToken, dbRefreshToken.token);
+    if (!isValidToken) {
+      clearRefreshTokenCookie(c);
+      return c.json(
+        {
+          success: false,
+          error: "Refresh token tidak valid",
+        },
+        401
+      );
+    }
+
+    // Check apakah token sudah di-revoke
+    if (dbRefreshToken.revokedAt) {
+      clearRefreshTokenCookie(c);
+      return c.json(
+        {
+          success: false,
+          error: "Refresh token sudah di-revoke",
+        },
+        401
+      );
+    }
+
+    // Check apakah token sudah expired di database
+    if (new Date(dbRefreshToken.expiresAt) < new Date()) {
+      clearRefreshTokenCookie(c);
+      return c.json(
+        {
+          success: false,
+          error: "Refresh token sudah expired",
+        },
+        401
+      );
+    }
+
+    // Get user info
+    const user = await createDb(c.env.DB).query.users.findFirst({
+      where: eq(users.id, decoded.userId),
+    });
+
+    if (!user) {
+      clearRefreshTokenCookie(c);
+      return c.json(
+        {
+          success: false,
+          error: "User tidak ditemukan",
+        },
+        404
+      );
+    }
+
+    // Generate new access token
+    const newAccessToken = generateAccessToken(user.id, user.username, user.role as UserRole);
+    const newAccessDecoded = jwt.decode(newAccessToken) as { exp?: number };
+    const newAccessExpiresAt = newAccessDecoded?.exp
+      ? new Date(newAccessDecoded.exp * 1000).toISOString()
+      : new Date(Date.now() + 15 * 60 * 1000).toISOString();
+
+    // Simpan session baru
+    const sessionId = generateSessionId();
+    const now = new Date().toISOString();
+
+    await createDb(c.env.DB).insert(sessions).values({
+      id: sessionId,
+      userId: user.id,
+      token: newAccessToken,
+      expiresAt: newAccessExpiresAt,
+      createdAt: now,
+      updatedAt: now,
+      ipAddress: c.req.header("X-Forwarded-For") || c.req.header("CF-Connecting-IP") || "",
+      userAgent: c.req.header("User-Agent") || "",
+    });
+
+    return c.json({
+      success: true,
+      message: "Token berhasil di-refresh",
+      data: {
+        token: newAccessToken,
+        expiresAt: newAccessExpiresAt,
+      },
+    });
+  } catch (error) {
+    console.error("Refresh error:", error);
+    return c.json(
+      {
+        success: false,
+        error: "Terjadi kesalahan server",
+      },
+      500
     );
   }
 });
