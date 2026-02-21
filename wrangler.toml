@@ -10,11 +10,11 @@ workers_dev = true
 # Environment variables
 [vars]
 ENVIRONMENT = "development"
-JWT_SECRET = "change-this-to-a-secure-random-string-of-at-least-32-characters"
+JWT_SECRET = "a162a30f3716543c7e79de09adf96ab8ca5e31920d879ba5f5bf56f3abe113cc"
 
 # D1 Database
 [[d1_databases]]
 binding = "DB"
 database_name = "arroyyan-db"
-database_id = "bf9bfb82-e3c6-47b3-b8c4-d6d3effc4510"
+database_id = "7e716d87-90b4-468f-933d-cf07976db393"
 migrations_dir = "drizzle"
